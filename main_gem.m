@@ -85,38 +85,15 @@ R_hat = Sigma + mu*mu';
 
 %% Iterate
 for i=1:num_iterations
-    %% Option 0: assuming uncorrelated predictors
-    % y_uncorr{i} = Z' * w_uncorr{i}
-    y_uncorr{i} = Z' * w_uncorr{i} - repmat(w_uncorr{i}',n,1)*b_hat;
-    
-    % update weights
-    %w_uncorr{i+1} = (Z * y_uncorr{i}) ./ sum( Z.^ 2 ,2); % denominator = sum f_i^2 of all samples
-    w_uncorr{i+1} = ((Z - repmat(b_hat,1,n)) * y_uncorr{i}) ./ sum( (Z - repmat(b_hat,1,n)).^ 2 ,2); % denominator = sum f_i^2 of all samples
-    w_uncorr{i+1} = w_uncorr{i+1} / sum(w_uncorr{i+1}); % keep sum(w) = 1.
+    %% Option 0: Assuming uncorrelated predictors
+    [y_uncorr{i} w_uncorr{i+1}] = ER_AssumeNoCorrelation(Z, b_hat, w_uncorr{i});
 
-    %% Option 1: Iterative approach - estimate b,Sigma, calculate R, update prediction
-    % find y_hat
-    %y_uncentered_gem{i} = Z' * w_uncentered_gem{i} - repmat(w_uncentered_gem{i}',n,1)*b_hat;
-    y_uncentered_gem{i} = (Z - repmat(b_hat,1,n))' * w_uncentered_gem{i};
-    
-    % update w
-    w_uncentered_gem{i+1} = inv(R_hat)*Z*y_uncentered_gem{i} / n;
-    w_uncentered_gem{i+1} = w_uncentered_gem{i+1} / sum(w_uncentered_gem{i+1}); % keep sum(w) = 1. TODO: Is this needed?
+    %% Option 1: Uncentered GEM (estimate b,Sigma, calculate R, update prediction)
+    [y_uncentered_gem{i} w_uncentered_gem{i+1}] = ...
+                                  ER_unsupervisedUncenteredGEM(Z, b_hat, R_hat, w_uncentered_gem{i});
 
-    %% Option 2 = unsupervised General Ensemble Method 
-    % get prediction
-    y_gem{i} = (Z - repmat(b_hat,1,n))' * w_gem{i};
-
-    % update weights
-    misfit = repmat(y_gem{i}',m,1) - (Z - repmat(b_hat,1,n));
-    if any(any(isnan(misfit)))
-        C{i} = C{i-1}; % keep the original (mean) weighting
-    else
-        C{i} = misfit * misfit' / n;
-    end;
-    Cinv = pinv(C{i});
-    w_gem{i+1} = sum(Cinv,1)' ./ sum(sum(Cinv)); % w_i = sum_j(Cinv_ij) / sum(sum(Cinv))
-
+    %% Option 2 = Unsupervised General Ensemble Method 
+    [y_gem{i} w_gem{i+1} C{i}] = ER_unsupervisedGEM(Z, b_hat, w_gem{i});
    
     %% Option 3* = Randomize Cross-Validation and choose the best subset of Z
     % Randomly choose m/2 classifiers. Take their mean and treat it as the
@@ -125,45 +102,47 @@ for i=1:num_iterations
     % classifiers are somewhat correct (low bias) there's a high
     % probability of selecting them at each round, and thus eliminating the
     % 
-    
-    % Caluculate cost functions
-    cost_func_uncenetered_gem(i) = w_uncentered_gem{i}'*R_hat*w_uncentered_gem{i} - 2*w_uncentered_gem{i}'*Z*y_uncentered_gem{i};
-    cost_func_gem(i) = w_gem{i}'*C{i}*w_gem{i};        
-    cost_func_uncorr(i) = w_uncorr{i}'*(R_hat .* eye(size(R_hat)))*w_uncorr{i} - 2*w_uncorr{i}'*Z*y_uncorr{i}; % like opt, only assuming no correlation
 end
 
-MSE_uncentered_gem = mean((y_uncentered_gem{i} - y_true').^2);
-MSE_gem = mean((y_gem{i} - y_true').^2);
-MSE_uncorr = mean((y_uncorr{i} - y_true').^2);
-MSE_mean_f_i = mean((mean(Z - repmat(b_hat,1,n),1) - y_true) .^2);
-MSE_supervised = mean((y_supervised - y_true) .^2);
-MSE_oracle = mean((y_oracle - y_true') .^2);
-% MSE_oracle2 = mean((y_oracle2 - y_true') .^2);
-MSE_2me = mean((y_2me - y_true') .^2);
 MSE_f_best = min(mean((Z - repmat(b_hat,1,n) - repmat(y_true,m,1)).^2,2)); % MSE of the best single predictor in the ensemble, given the estimated bias
+fprintf('MSE[best predictor] = %g\n',MSE_f_best);
+
+MSE_mean_f_i = mean((mean(Z - repmat(b_hat,1,n),1) - y_true) .^2);
+fprintf('MSE[Mean f_i] = %g\n',MSE_mean_f_i);
+
+MSE_uncorr = mean((y_uncorr{i} - y_true').^2);
+fprintf('MSE[Uncorrelated] = %g\n',MSE_uncorr);
+
+MSE_gem = mean((y_gem{i} - y_true').^2);
+fprintf('MSE[US GEM] = %g\n',MSE_gem);
+
+MSE_uncentered_gem = mean((y_uncentered_gem{i} - y_true').^2);
+fprintf('MSE[US Uncentered GEM] = %g\n',MSE_uncentered_gem);
+
+MSE_supervised = mean((y_supervised - y_true) .^2);
+fprintf('MSE[Supervised] = %g\n',MSE_supervised);
+
+MSE_2me = mean((y_2me - y_true') .^2);
+fprintf('MSE[2nd Moment] = %g\n',MSE_2me);
+
 MSE_sgem = mean((y_sgem - y_true).^2);
+fprintf('MSE[SV GEM] = %g\n',MSE_sgem);
 
-
-fprintf(['MSE[mean f_i] = %g\nMSE[supervised] = %g\nMSE[oracle] = %g\n' ...
-         'MSE[uncentered gem] = %g\nMSE[gem] = %g\nMSE[uncorr] = %g\n' ...
-         ...%'MSE[oracle 2] = %g\n' ...
-         'MSE[best predictor] = %g\nMSE[2me] = %g\nMSE[Supervised GEM] = %g\n'], ...
-    MSE_mean_f_i,MSE_supervised, MSE_oracle, ...
-    MSE_uncentered_gem,MSE_gem,MSE_uncorr, ... 
-    ... % MSE_oracle2,
-    MSE_f_best,MSE_2me,MSE_sgem);
+% MSE_oracle2 = mean((y_oracle2 - y_true') .^2);
+MSE_oracle = mean((y_oracle - y_true') .^2);
+fprintf('MSE[Oracle] = %g\n',MSE_oracle);
 
 fprintf('\n----------------------\n');
 fprintf('MSE[oracle] =\t%g\nMSE[SV GEM] =\t%g\nDiff =\t\t\t%g\n',MSE_oracle,MSE_sgem,MSE_sgem - MSE_oracle);
 fprintf('\n----------------------\n');
-fprintf('MSE[oracle] =\t%g\nMSE[Superv] =\t%g\nDiff =\t\t\t%g\n',MSE_oracle,MSE_supervised,MSE_supervised - MSE_oracle);
+fprintf('MSE[oracle] =\t%g\nMSE[SV Uncentered GEM] =\t%g\nDiff =\t\t\t%g\n',MSE_oracle,MSE_supervised,MSE_supervised - MSE_oracle);
 
 %% Plotting
-if ~exist('dontPlot') || (~dontPlot)
-
-ht = 3; wd = 2; % height and width of the plot (given in # of subplots)
-figure;
-
-subplot(ht,wd,1); hold all;
-close all;
-end
+% if ~exist('dontPlot') || (~dontPlot)
+% 
+% ht = 3; wd = 2; % height and width of the plot (given in # of subplots)
+% figure;
+% 
+% subplot(ht,wd,1); hold all;
+% close all;
+% end
