@@ -1,5 +1,7 @@
-% BUGGY CODE, DON'T USE. Use ER_linear_regression_oracle instead.
-function [y_pred,w,R,rho] = calculate_oracle(Ey, min_y, max_y, Sigma_true, biases_true, Z)
+% Oracle linear predictor
+function [y_pred,w,R,rho] = calculate_oracle(y, Ey, Sigma_true, biases_true, Z)
+    min_y = min(y);
+    max_y = max(y);
     rho = zeros(numel(biases_true),1);
     R = zeros(numel(biases_true));
 
@@ -20,5 +22,8 @@ function [y_pred,w,R,rho] = calculate_oracle(Ey, min_y, max_y, Sigma_true, biase
         *(rho - Ey * biases_true);
     
     %% Calculate oracle predictions
+    %y_pred = (Z - repmat(biases_true,1,size(Z,2)))'*w;
     y_pred = (Z - repmat(biases_true,1,size(Z,2)))'*w;
+    
+    
 end

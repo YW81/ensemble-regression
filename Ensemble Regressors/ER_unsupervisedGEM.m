@@ -9,6 +9,8 @@ function [y_pred,w_new,C] = ER_unsupervisedGEM(Z, b_hat, prev_w)
     
     if any(any(isnan(misfit)))
         w_new = prev_w; % keep the original (mean) weighting
+        C = 0;
+        
     else % no NaNs in data
         
         C = misfit * misfit' / n;
