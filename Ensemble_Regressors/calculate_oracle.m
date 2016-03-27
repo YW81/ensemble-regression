@@ -1,4 +1,4 @@
-% BUGGY CODE, DON'T USE. Use ER_linear_regression_oracle instead.
+% DON'T USE, BUGGY CODE. Use ER_linear_regression_oracle instead.
 function [y_pred,w,R,rho] = calculate_oracle(Ey, min_y, max_y, Sigma_true, biases_true, Z)
     rho = zeros(numel(biases_true),1);
     R = zeros(numel(biases_true));
