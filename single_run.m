@@ -3,7 +3,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Init
-addpath 'Ensemble Regressors'
+addpath 'Ensemble_Regressors'
 addpath 'DataGeneration'
 
 if ~exist('A_outsideParams') || (~A_outsideParams)
@@ -26,7 +26,10 @@ if ~exist('A_outsideParams') || (~A_outsideParams)
     min_var = max_var/4;                         % 
 end;
 
-[Z,real_bias,real_var,real_Sigma] = GenerateNormalData(m, n + n_training_set, y_true, ...
+% [Z,real_bias,real_var,real_Sigma] = GenerateNoBoazrmalData(m, n + n_training_set, y_true, ...
+%                                             min_bias, max_bias, ...
+%                                             min_var, max_var);
+[Z,real_bias,real_var,real_Sigma] = GenerateDependentData(m, n + n_training_set, y_true, ...
                                             min_bias, max_bias, ...
                                             min_var, max_var);
                                         
@@ -71,7 +74,7 @@ R_hat = Sigma + mu*mu';
 %% Oracle Prediction
 [y_oracle, beta_oracle] = ER_linear_regression_oracle(y_true, Z);
 % [y_oracle,w_oracle,R_real,rho_real] = ...
-%     calculate_oracle(y_true,Ey,real_Sigma, real_bias,Z);
+%     calculate_oracle(y_true,Ey,real_Sigma, real_bias,Z);single_run
 
 %% Oracle 2 - Empirical R/rho
 % mu_real = mu; %Ey+real_bias;
@@ -82,7 +85,8 @@ R_hat = Sigma + mu*mu';
 % y_oracle2 = (Z - repmat(real_bias,1,n))' * w_oracle2;
 
 %% 2nd Moment Estimator (assumes Ey, Ey^2 are given)
-[y_2me, beta_2me, rho_hat] = ER_SecondMoment(Z,Ey,Ey2,mu, b_hat, R_hat);
+%[y_2me, beta_2me, rho_hat] = ER_SecondMoment(Z,Ey,Ey2,mu, b_hat, R_hat);
+[y_2me, beta_2me] = ER_Boaz(Z,Ey,Ey2);
 
 %% Iterate
 for i=1:num_iterations
@@ -106,8 +110,8 @@ end
 % 
 
 %% Calculate MSEs
-MSE_sgem_no_centering = mean((y_sgem_no_centering - y_true) .^2);
-fprintf('MSE[GEM no centering] = %g\n',MSE_sgem_no_centering);
+% MSE_sgem_no_centering = mean((y_sgem_no_centering - y_true) .^2);
+% fprintf('MSE[GEM no centering] = %g\n',MSE_sgem_no_centering);
 
 MSE_pcGEM = mean((y_pcGEM - y_true).^2);
 fprintf('MSE[P&C GEM] = %g\n',MSE_pcGEM);
@@ -122,8 +126,8 @@ fprintf('MSE[best predictor] = %g\n',MSE_f_best);
 MSE_mean_f_i = mean((mean(Z - repmat(b_hat,1,n),1) - y_true) .^2);
 fprintf('MSE[Mean f_i] = %g\n',MSE_mean_f_i);
 
-MSE_uncorr = mean((y_uncorr{i} - y_true').^2);
-fprintf('MSE[Uncorrelated] = %g\n',MSE_uncorr);
+% MSE_uncorr = mean((y_uncorr{i} - y_true').^2);
+% fprintf('MSE[Uncorrelated] = %g\n',MSE_uncorr);
 
 MSE_2me = mean((y_2me - y_true') .^2);
 fprintf('--\nMSE[2nd Moment] = %g\n',MSE_2me);
@@ -133,7 +137,6 @@ fprintf('MSE[US GEM] = %g\n',MSE_gem);
 
 MSE_uncentered_gem = mean((y_uncentered_gem{i} - y_true').^2);
 fprintf('MSE[US Uncentered GEM] = %g\n',MSE_uncentered_gem);
-
 
 %% Plotting
 % if ~exist('A_dontPlot') || (~A_dontPlot)

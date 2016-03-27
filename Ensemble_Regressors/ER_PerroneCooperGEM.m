@@ -7,6 +7,10 @@ function [y_pred,w,C] = ER_PerroneCooperGEM(Ztrain, ytrain, Ztest)
     
     % Calculate Covariance C
     C = (misfit_sgem * misfit_sgem') / n_train;
+%     if rcond(C) < 1e-5 % diagonal loading
+%         C = C + eye(size(C)) * 1e-5;
+%     end;
+    
     Ci = inv(C);
     
     % Calculate Weights w

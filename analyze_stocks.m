@@ -1,22 +1,32 @@
 clear all;
-load '~/code/github/stocks/data/parsed_data_matrix.mat'
+load 'parsed_data_matrix.mat'
 
 %% Init Data
 % Fix Data Matrix
 Z = Z';
 Z(Z == 0) = NaN;
+%Z = Z(sum(~isnan(Z),2) > 20, :);
 m = size(Z,1);
 n = size(y,1);
 
 %% Init Assumptions
 Ey = mean(y);
 var_y = var(y);
-CO_OCCURRENCE_THRESHOLD = 20;
+CO_OCCURRENCE_THRESHOLD = 50;
 MIN_NUMBER_OF_REGRESSORS = 10;
 
 %% Estimation
 
 b_hat = nanmean(Z,2) - Ey;
+% % Z matrix completion
+% for i=1:m
+%     for j=1:n
+%         if isnan(Z(i,j))
+%             Z(i,j) = b_hat(i);
+%         end;
+%     end;
+% end
+
 
 % calculate covariance with missing values
 Sigma = zeros(m);
@@ -43,8 +53,12 @@ for i=1:m
 end;
 
 %% Prediction
+
+
 y_pred = zeros(size(y));
+% calculate the prediction one stock at a time
 for i=1:n
+    % choose only regressors with some recommendation for the current stock.
     non_zero_regressor_idxs = find(~isnan(Z(:,i)));
     non_zero_regressor_idxs = non_zero_regressor_idxs(any(Sigma(non_zero_regressor_idxs, non_zero_regressor_idxs)));
     if length(non_zero_regressor_idxs) < MIN_NUMBER_OF_REGRESSORS
@@ -69,15 +83,33 @@ end;
 yd = y(~isnan(y_pred));
 yd_pred = y_pred(~isnan(y_pred));
 
-fprintf('Number of predictions: %d\n', length(yd_pred));
+fprintf('\n\n');
 fprintf('Correlation between predictions and true response: %g\n', corr(yd,yd_pred));
-fprintf('Average absolute error distance: %g\n', norm(yd - yd_pred,1) / length(yd_pred));
-plot([min(yd) max(yd)], [min(yd) max(yd)], '--'); hold; plot(yd,yd_pred,'x');
+fprintf('%50s\t L1 Error: %g,\t Std %6.03g\t Number of predictions: %d\n', ...
+  'SECOND MOMENT META-REGRESSOR', mean(abs(yd - yd_pred)), std(abs(yd - yd_pred)), length(yd_pred));
+plot([min(yd) max(yd)], [min(yd) max(yd)], '--'); hold on; plot(yd,yd_pred,'x'); hold off;
 
 
 %% Find best analyst
 for i=1:m
     y_analyst = Z(i,:)';
     idxs = find(~isnan(y_analyst));
+    
+    % only rank analysts with the minimal number of predictions
+    if length(idxs) < CO_OCCURRENCE_THRESHOLD
+        analyst_avg_error(i) = inf;
+        analyst_error_stdev(i) = inf;
+        continue;
+    end;
+    
     analyst_avg_error(i) = mean(abs(y_analyst(idxs) - y(idxs)));
+    analyst_error_stdev(i) = std(abs(y_analyst(idxs) - y(idxs)));
+end;
+[~, top_analysts_idxs] = sort(analyst_avg_error);
+fprintf('Top analysts: \n=============\n');
+for i=1:5
+    fprintf('%50s\t L1 Error: %g,\t Std %6.03g\t Number of predictions: %d\n', ...
+        labels_analysts{top_analysts_idxs(i)}, ...
+        analyst_avg_error(top_analysts_idxs(i)), analyst_error_stdev(top_analysts_idxs(i)), ...
+        sum(~isnan(Z(top_analysts_idxs(i),:))));
 end;
