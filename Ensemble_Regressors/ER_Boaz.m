@@ -16,13 +16,13 @@ function [y_pred,beta] = ER_Boaz(Z, Ey, Ey2)
     
     T = 1/n * Z_new * (Z_new'); 
     Q = T-Ey^2 * ones(size(T)); 
-    %w = var_y * Q \ ones(m,1); 
-    w = var_y *inv(Q) * ones(m,1); 
+    w = var_y * (Q \ ones(m,1)); 
+    %w = var_y *inv(Q) * ones(m,1); 
     
     w_0 = Ey * (1 - sum(w));
     
     y_pred = w_0 + (Z_new)'*w;
     beta = [w_0;w];
     
-    fprintf('Eigs(Q): '); eig(Q)
+    %fprintf('Eigs(Q): '); eig(Q)
 end
