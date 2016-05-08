@@ -5,7 +5,9 @@ clear all; close all;
 clc;
 addpath 'Ensemble_Regressors'
 addpath 'DataGeneration'
-delete(gcp); parpool(4);
+[~,hostname] = system('hostname'); hostname = strtrim(hostname);
+delete(gcp); 
+if isempty(strfind(hostname,'weiz')) parpool(4); else parpool(8); end; % if in WIS run 8 workers
 
 %%%%%%%% LOAD DATA SET BEFORE RUNNING THIS CODE %%%%%%%%%%%%%%%
 %%%
@@ -92,7 +94,7 @@ for dataset_name=datasets
     fval_cur = zeros(iters,1); lambda_rnd_cur = ceil(rand(iters,1)*8)/2; %zeros(iters,1); % lambda in .5:.5:4
     mean_reg_mse_cur = zeros(iters,1);
     beta_0_cur = cell(iters,1); beta_cur = cell(iters,1); y_cur = cell(iters,1); 
-    system('rm -f progress.txt');
+    system('rm -f progress.txt; touch progress.txt');
     parfor j=1:iters % average 50 seconds per 100 iterations
         beta_0_cur{j} = rand(m+1,1); 
         %lambda_rnd_cur(j) = ceil(rand*8)/2; % lambda in .5:.5:4
@@ -200,4 +202,4 @@ end % for dataset_name in datasets
 cols = {results_summary_current_dataset{:,1}};
 for i=1:length(cols); cols{i}=strrep(cols{i},' ','_');end;
 out=cell2table(results_summary, 'RowNames', datasets', 'VariableNames', cols)
-writetable(out, 'results/last_summary.csv','WriteRowNames',true)
+writetable(out, ['results/last_summary-' hostname '.csv'],'WriteRowNames',true)
