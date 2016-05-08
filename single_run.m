@@ -1,149 +1,203 @@
-%   Comparing approaches for ensemble regression
-%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Comparing approaches for ensemble regression
 
 %% Init
+clear all; close all; 
+clc;
 addpath 'Ensemble_Regressors'
 addpath 'DataGeneration'
+delete(gcp); parpool(4);
 
-if ~exist('A_outsideParams') || (~A_outsideParams)
-    clc; clear all; close all;
-    m = 15;
-    n = 1000;
-    num_iterations = 20;
-    dontPlot = 1;
+%%%%%%%% LOAD DATA SET BEFORE RUNNING THIS CODE %%%%%%%%%%%%%%%
+%%%
+%%% The code assumes existance of Z,y,Ztrain,ytrain, Ey, Ey2
+%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% datasets = {'./Datasets/MVGaussianDepData.mat', ... %y=y_true;
+%             './Datasets/ensemble_CCPP.mat', ...
+%             './Datasets/ensemble_abalone.mat', ...
+%             './Datasets/ensemble_bike_sharing.mat', ...
+%             './Datasets/ensemble_white_wine.mat', ...
+%             './Datasets/ensemble_SP500_swcp.mat', ...
+%             '/home/omer/code/github/ensemble-regression/ensemble.mat'};
 
-    %% Create data for simulation
-    n_training_set = 200;
-    y_true = linspace(100,200,n + n_training_set);
-    Ey = mean(y_true);
-    Ey2 = mean(y_true.^2);
-
-    % min/max bias/variance
-    min_bias = -.75*(max(y_true) - min(y_true)); % -75
-    max_bias = 1.5*(max(y_true) - min(y_true));  %+150
-    max_var = (max(y_true) - min(y_true))^2;     % 100^2
-    min_var = max_var/4;                         % 
+%ROOT = '~/code/github/ensemble-regression/auto/';
+ROOT = './Datasets/auto/';
+file_list = dir([ROOT '*.mat']);
+datasets = cell(1,length(file_list));
+for i=1:length(file_list)
+    datasets{i}=[ROOT file_list(i).name];
 end;
+% datasets = {'./Datasets/MVGaussianDepData.mat'};
+% datasets = {'~/code/github/ensemble-regression/auto/auto_ccpp.mat'};
 
-% [Z,real_bias,real_var,real_Sigma] = GenerateNoBoazrmalData(m, n + n_training_set, y_true, ...
-%                                             min_bias, max_bias, ...
-%                                             min_var, max_var);
-[Z,real_bias,real_var,real_Sigma] = GenerateDependentData(m, n + n_training_set, y_true, ...
-                                            min_bias, max_bias, ...
-                                            min_var, max_var);
-                                        
-[Ztrain, ytrain, Z, y_true] = TrainTestSplit(Z, y_true, n_training_set / (n+n_training_set));
+for dataset_name=datasets
+    fprintf([dataset_name{1} '\n']);
+    load(dataset_name{1})
+    if isempty(strfind(dataset_name{1},'MVGaussianDepData')) % if ~strcmp(dataset_name{1},'./Datasets/MVGaussianDepData.mat') % 
+        y_true = double(y); clear y; % renmae y to y_true and make sure both y and y_true are double
+        ytrain = double(ytrain);     % (in the sweets dataset y is integer)
+    end;
 
-% TODO:
-%2. Generate the data in different ways (uncorrelated, block diagonal covariance, wishart, others).
+    [m,n] = size(Z);
+    n_training_set = size(Ztrain,2);
+    var_y = Ey2 - Ey.^2;
 
-%% Simulation Initializations
-y_uncorr = cell(num_iterations,1);
-y_uncentered_gem = cell(num_iterations,1);
-y_gem = cell(num_iterations,1);
-w_uncorr = cell(num_iterations+1,1);
-w_uncentered_gem = cell(num_iterations+1,1);
-w_gem = cell(num_iterations+1,1);
-cost_func_uncenetered_gem = zeros(num_iterations,1);
-cost_func_uncorr = zeros(num_iterations,1);
-cost_func_gem = zeros(num_iterations,1);
-C = cell(num_iterations,1);
+    %% Predict
 
-% Initialize weights
-w_uncorr{1} = ones(m,1) / m; % Init w for equal weights
-w_uncentered_gem{1} = ones(m,1) / m;
-w_gem{1} = ones(m,1) / m;
-b_last = zeros(m,1); % init bias estimation to zero
+    % Oracle Prediction
+    [y_oracle, beta_oracle] = ER_linear_regression_oracle(y_true, Z);
 
-%% Init estimations of bias and variance
-b_hat = mean(Z,2) - Ey;
-mu = mean(Z,2);    
-Z_centered = Z - repmat(mu,1,n);    
-Sigma = Z_centered * Z_centered' ./ (n-1); % unbiased. maximum likelihood is 1/n
-R_hat = Sigma + mu*mu';
+    % Perrone & Cooper Supervised GEM
+    [y_pc, w_pc, C_pc] = ER_PerroneCooperGEM(Ztrain, ytrain, Z);
 
-
-%% Perrone & Cooper Supervised GEM
-[y_pcGEM, w_pcGEM, C_pcGEM] = ER_PerroneCooperGEM(Ztrain, ytrain, Z);
-
-%% P&C Supervised GEM without covariance centering
-[y_sgem_no_centering, w_sgem_no_centering, R_sgem_no_centering, rho_sgem_no_centering] = ...
-    ER_SupervisedGEM_no_centering(Ztrain, ytrain, Z);
+    %% 2nd Moment Estimator (assumes Ey, Ey^2 are given)
+    Ey = mean(y_true); Ey2 = mean(y_true.^2);
+    [y_mean, beta_mean] = ER_MeanWithBiasCorrection(Z,Ey);
+    [y_varw, beta_varw] = ER_VarianceWeightingWithBiasCorrection(Z,Ey);
+    [y_2, beta_2] = ER_SecondMoment(Z,Ey,Ey2); 
+    [y_2oracle, beta_2oracle] = ER_SecondMomentOracle(Z,Ey,Ey2,y_true);
+    [y_cvx_m, beta_cvx_m] = ER_ConvexProgram(Z, Ey, Ey2, 2, 2, beta_mean);
+    [y_cvx_v, beta_cvx_v] = ER_ConvexProgram(Z, Ey, Ey2, 2, 2, beta_varw);
+    [y_cvx_2, beta_cvx_2] = ER_ConvexProgram(Z, Ey, Ey2, 2, 2, beta_2);
+    [y_cvx_cv_m, beta_cvx_cv_m, lambda_mean_m, lambda_var_m, fval_m, mean_reg_mse_m] = ...
+        ER_ConvexProgramWithCV(Z, Ey, Ey2, beta_mean); %set(gcf,'Name',[dataset_name{1} ' (init mean)']);
+    [y_cvx_cv_v, beta_cvx_cv_v, lambda_mean_v, lambda_var_v, fval_v, mean_reg_mse_v] = ...
+        ER_ConvexProgramWithCV(Z, Ey, Ey2, beta_varw); %set(gcf,'Name',[dataset_name{1} ' (init varw)']);
+    [y_cvx_cv_2, beta_cvx_cv_2, lambda_mean_2, lambda_var_2, fval_2, mean_reg_mse_2] = ...
+        ER_ConvexProgramWithCV(Z, Ey, Ey2, beta_2); %set(gcf,'Name',[dataset_name{1} ' (init 2ME)']);
+    %[y_cvx2, beta_cvx2] = ER_ConvexProgram2(Z, Ey, Ey2, lambda_mean, lambda_var);
+    %[y_cvx_cv2, beta_cvx_cv2, lambda_mean2, lambda_var2] = ER_ConvexProgramWithCV2(Z, Ey, Ey2);
+    [y_b, beta_b] = ER_Boaz(Z,Ey,Ey2); 
+    [y_qp, beta_qp] = ER_QuadProg(Z,Ey,Ey2); 
     
-%% Oracle Prediction
-[y_oracle, beta_oracle] = ER_linear_regression_oracle(y_true, Z);
-% [y_oracle,w_oracle,R_real,rho_real] = ...
-%     calculate_oracle(y_true,Ey,real_Sigma, real_bias,Z);single_run
+    %% Test random init
+    
+        % ER_ConvexProgram INTERNALS
+            % Init params
+            b_hat = mean(Z,2) - Ey; % approximate bias
+            C = cov(Z');
+            Zc = Z - repmat(b_hat,1,n);
+            Z1c = [ones(1,n); Zc];
+            K1 = Zc*Z1c';
+            K2 = Z1c*Z1c';
 
-%% Oracle 2 - Empirical R/rho
-% mu_real = mu; %Ey+real_bias;
-% R_real2 = R_hat; %real_Sigma + mu_real*mu_real';
-% rho_real2 = sum(bsxfun(@times, Z,y_true),2) / n;
-% w_oracle2 = inv(R_real2) * rho_real2;
-% w_oracle2 = w_oracle2 ./ sum(w_oracle2);
-% y_oracle2 = (Z - repmat(real_bias,1,n))' * w_oracle2;
+            % constraints w_i >= 0
+            A = [zeros(m,1), -eye(m)];
+            b = zeros(m,1);
 
-%% 2nd Moment Estimator (assumes Ey, Ey^2 are given)
-%[y_2me, beta_2me, rho_hat] = ER_SecondMoment(Z,Ey,Ey2,mu, b_hat, R_hat);
-[y_2me, beta_2me] = ER_Boaz(Z,Ey,Ey2);
+            options = optimoptions('fmincon', 'Display','None');%'iter-detailed');%,'MaxFunEvals',1e4);
+        %
 
-%% Iterate
-for i=1:num_iterations
-    %% Option 0: Assuming uncorrelated predictors
-    [y_uncorr{i}, w_uncorr{i+1}] = ER_AssumeNoCorrelation(Z, b_hat, w_uncorr{i});
+    iters = 100;
+    fval_cur = zeros(iters,1); lambda_rnd_cur = ceil(rand(iters,1)*8)/2; %zeros(iters,1); % lambda in .5:.5:4
+    mean_reg_mse_cur = zeros(iters,1);
+    beta_0_cur = cell(iters,1); beta_cur = cell(iters,1); y_cur = cell(iters,1); 
+    system('rm -f progress.txt');
+    parfor j=1:iters % average 50 seconds per 100 iterations
+        beta_0_cur{j} = rand(m+1,1); 
+        %lambda_rnd_cur(j) = ceil(rand*8)/2; % lambda in .5:.5:4
+        obj = @(beta) cvx_opt_for_w(beta,m,n,Ey,var_y, C, Z1c, K1, K2, 0, lambda_rnd_cur(j));        
+        %[y_cur{j}, beta_cur{j}, fval_cur(j)] = ER_ConvexProgram(Z, Ey, Ey2, 0, lambda_rnd_cur(j), beta_0_cur{j}); 
+        [beta_cur{j},fval_cur(j)] = fmincon(obj, beta_0_cur{j}, A, b,[],[],[],[], [], options); % ER_ConvexProgram INTERNALS
+        mean_reg_mse_cur(j) = mean(mean((Zc - repmat(beta_cur{j}'*Z1c,m,1)).^2,2)); % the mean regressor error
+        system('echo "." >> progress.txt');
+    end;
+    j = find(fval_cur == min(fval_cur));
+    beta_cvx_cv_0_rnd = beta_0_cur{j}; 
+    beta_cvx_cv_rnd = beta_cur{j}; 
+    fval_rnd = fval_cur(j);
+    lambda_var_rnd = lambda_rnd_cur(j);
+    %y_cvx_cv_rnd=y_cur{j}; 
+    y_cvx_cv_rnd = Z1c'*beta_cvx_cv_rnd; % ER_ConvexProgram INTERNALS
+    mean_reg_mse_rnd = mean_reg_mse_cur(j);
 
-    %% Option 1: Uncentered GEM (estimate b,Sigma, calculate R, update prediction)
-    [y_uncentered_gem{i}, w_uncentered_gem{i+1}] = ...
-                                  ER_unsupervisedUncenteredGEM(Z, b_hat, R_hat, w_uncentered_gem{i});
+    %% Print Results
+    fprintf('\nDataset: %s, Var(y) = %.4g, n = %d, m = %d\n',dataset_name{1},var_y,n,m);
+    fprintf('=====================================================================================\n');
+    fprintf('Init Mean:\tLambda mean = %.2f, lambda var = %.2f, fval = %.4g, mean epsilon_i^2 = %.4g, var = %.4g\n', lambda_mean_m, lambda_var_m, fval_m, mean_reg_mse_m, var(y_cvx_cv_m));
+    fprintf('Init Var: \tLambda mean = %.2f, lambda var = %.2f, fval = %.4g, mean epsilon_i^2 = %.4g, var = %.4g\n', lambda_mean_v, lambda_var_v, fval_v, mean_reg_mse_v, var(y_cvx_cv_v));
+    fprintf('Init 2ME: \tLambda mean = %.2f, lambda var = %.2f, fval = %.4g, mean epsilon_i^2 = %.4g, var = %.4g\n', lambda_mean_2, lambda_var_2, fval_2, mean_reg_mse_2, var(y_cvx_cv_2));
+    fprintf('Init RND: \tLambda mean = %.2f, lambda var = %.2f, fval = %.4g, mean epsilon_i^2 = %.4g, var = %.4g\n', 0, lambda_var_rnd, fval_rnd, mean_reg_mse_rnd, var(y_cvx_cv_rnd));
 
-    %% Option 2 = Unsupervised General Ensemble Method 
-    [y_gem{i}, w_gem{i+1}, C{i}] = ER_unsupervisedGEM(Z, b_hat, w_gem{i});
-end
+    results = [y_cvx_cv_m, y_cvx_cv_v, y_cvx_cv_2, y_cvx_cv_rnd]; 
+    fvals = [fval_m fval_v fval_2 fval_rnd];
+    y_our_method = results(:,find(fvals == min(fvals)));
+    
+    mse_oracle = mean((y_true'-y_oracle).^2);
+    mse = @(x) (mean((y_true'-x).^2)) / mse_oracle; % show MSE relative to oracle.
+    calc_g = @(x) (mean((Zc - repmat(x',m,1)).*repmat(x',m,1),2)); % calc g assuming x is the true response (y_true)
+    results_summary_current_dataset = ...
+           {'oracle', mse_oracle ; ...
+            'e2ME Oracle', mse(y_2oracle) ; ...
+            'PC',   mse(y_pc) ; ...
+            'Mean', mse(y_mean) ; ...
+            'Var Weighted', mse(y_varw) ; ...
+            'e2ME', mse(y_2) ; ...
+            'Our Method', mse(y_our_method) ; ...
+            'CVX init mean', mse(y_cvx_m) ; ...
+            'CVX init varw', mse(y_cvx_v) ; ...
+            'CVX init 2ME', mse(y_cvx_2) ; ...
+            'CVX with CV init mean', mse(y_cvx_cv_m); ...
+            'CVX with CV init varw', mse(y_cvx_cv_v); ...
+            'CVX with CV init 2ME', mse(y_cvx_cv_2); ...
+            'CVX with CV init RND', mse(y_cvx_cv_rnd); ...
+            'fval_mean', fval_m; ...
+            'fval_varw', fval_v; ...
+            'fval_2ME', fval_2; ...
+            'fval_rnd', fval_rnd; ...
+            'n', n; 'm', m; 'Ey',Ey; 'Var_y',var_y; ...
+            'Lambda init mean', lambda_var_m; ...
+            'Lambda init varw', lambda_var_v; ...
+            'Lambda init 2ME', lambda_var_2;  ...
+            'Lambda init RND', lambda_var_rnd;  ...
+            'Mean Regressor MSE init mean', mean_reg_mse_m; ...
+            'Mean Regressor MSE init varw', mean_reg_mse_v; ...
+            'Mean Regressor MSE init 2ME', mean_reg_mse_2; ...
+            'Mean Regressor MSE init RND', mean_reg_mse_rnd; ...
+            'cond Cov Z transpose', cond(cov(Z')); ...
+            ... % CALC mean(g) over m regressors
+            'oracle mean g', mean(calc_g(y_oracle)) ; ...
+            'e2ME Oracle mean g', mean(calc_g(y_2oracle)) ; ...
+            'PC mean g',   mean(calc_g(y_pc)) ; ...
+            'Mean mean g', mean(calc_g(y_mean)) ; ...
+            'Var Weighted mean g', mean(calc_g(y_varw)) ; ...
+            'e2ME mean g', mean(calc_g(y_2)) ; ...
+            'Our Method mean g', mean(calc_g(y_our_method)) ; ...
+            'CVX mean mean g', mean(calc_g(y_cvx_m)) ; ...
+            'CVX varw mean g', mean(calc_g(y_cvx_v)) ; ...
+            'CVX 2ME mean g', mean(calc_g(y_cvx_2)) ; ...
+            'CVX CV iMean mean g', mean(calc_g(y_cvx_cv_m)); ...
+            'CVX CV iVarw mean g', mean(calc_g(y_cvx_cv_v)); ...
+            'CVX CV i2ME mean g', mean(calc_g(y_cvx_cv_2)); ...
+            'CVX CV iRND mean g', mean(calc_g(y_cvx_cv_rnd)); ...
+            ... % CALC var(g)            
+            'oracle var g', var(calc_g(y_oracle)) ; ...
+            'e2ME Oracle var g', var(calc_g(y_2oracle)) ; ...
+            'PC var g',   var(calc_g(y_pc)) ; ...
+            'Mean var g', var(calc_g(y_mean)) ; ...
+            'Var Weighted var g', var(calc_g(y_varw)) ; ...
+            'e2ME var g', var(calc_g(y_2)) ; ...
+            'Our Method var g', var(calc_g(y_our_method)) ; ...
+            'CVX mean var g', var(calc_g(y_cvx_m)) ; ...
+            'CVX varw var g', var(calc_g(y_cvx_v)) ; ...
+            'CVX 2ME var g', var(calc_g(y_cvx_2)) ; ...
+            'CVX CV iMean var g', var(calc_g(y_cvx_cv_m)); ...
+            'CVX CV iVarw var g', var(calc_g(y_cvx_cv_v)); ...
+            'CVX CV i2ME var g', var(calc_g(y_cvx_cv_2)); ...
+            'CVX CV iRND var g', var(calc_g(y_cvx_cv_rnd)); ...            
+            };
+    
+    if ~exist('results_summary','var')
+        results_summary = cell(length(datasets), size(results_summary_current_dataset,1));
+    end;
+    for i=1:length(results_summary_current_dataset)
+        fprintf('%25s \t%g\n',results_summary_current_dataset{i,1}, results_summary_current_dataset{i,2});
+        results_summary{find(strcmp(dataset_name,datasets)),i} = results_summary_current_dataset{i,2};
+    end;
+end % for dataset_name in datasets
 
-%% Option 3* = Randomize Cross-Validation and choose the best subset of Z
-% Randomly choose m/2 classifiers. Take their mean and treat it as the
-% true value for y. Update the other m/2 classifiers based on that[1;real_var]
-% value of y (with a learning rate). Idea is - if  3/4 of the
-% classifiers are somewhat correct (low bias) there's a high
-% probability of selecting them at each round, and thus eliminating the
-% 
-
-%% Calculate MSEs
-% MSE_sgem_no_centering = mean((y_sgem_no_centering - y_true) .^2);
-% fprintf('MSE[GEM no centering] = %g\n',MSE_sgem_no_centering);
-
-MSE_pcGEM = mean((y_pcGEM - y_true).^2);
-fprintf('MSE[P&C GEM] = %g\n',MSE_pcGEM);
-
-% MSE_oracle2 = mean((y_oracle2 - y_true') .^2);
-MSE_oracle = mean((y_oracle - y_true') .^2);
-fprintf('--\nMSE[Oracle] = %g\n',MSE_oracle);
-
-MSE_f_best = min(mean((Z - repmat(b_hat,1,n) - repmat(y_true,m,1)).^2,2)); % MSE of the best single predictor in the ensemble, given the estimated bias
-fprintf('MSE[best predictor] = %g\n',MSE_f_best);
-
-MSE_mean_f_i = mean((mean(Z - repmat(b_hat,1,n),1) - y_true) .^2);
-fprintf('MSE[Mean f_i] = %g\n',MSE_mean_f_i);
-
-% MSE_uncorr = mean((y_uncorr{i} - y_true').^2);
-% fprintf('MSE[Uncorrelated] = %g\n',MSE_uncorr);
-
-MSE_2me = mean((y_2me - y_true') .^2);
-fprintf('--\nMSE[2nd Moment] = %g\n',MSE_2me);
-
-MSE_gem = mean((y_gem{i} - y_true').^2);
-fprintf('MSE[US GEM] = %g\n',MSE_gem);
-
-MSE_uncentered_gem = mean((y_uncentered_gem{i} - y_true').^2);
-fprintf('MSE[US Uncentered GEM] = %g\n',MSE_uncentered_gem);
-
-%% Plotting
-% if ~exist('A_dontPlot') || (~A_dontPlot)
-% 
-% ht = 3; wd = 2; % height and width of the plot (given in # of subplots)
-% figure;
-% 
-% subplot(ht,wd,1); hold all;
-% close all;
-% end
+%% Print Result Summary
+cols = {results_summary_current_dataset{:,1}};
+for i=1:length(cols); cols{i}=strrep(cols{i},' ','_');end;
+out=cell2table(results_summary, 'RowNames', datasets', 'VariableNames', cols)
+writetable(out, 'results/last_summary.csv','WriteRowNames',true)
