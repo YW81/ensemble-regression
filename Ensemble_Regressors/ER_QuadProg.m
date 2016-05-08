@@ -28,8 +28,11 @@ function [y_pred,beta] = ER_QuadProg(Z, Ey, Ey2)
     Aeq = []; beq = [];
     f = -[Ey Ey2*ones(1,m)]';
     H = [[1 Ey*ones(1,m)] ; [Ey*ones(m,1) T]];
+    H = (H+H')/2; % make sure the hessian is symmetric to numerical accuracy (eps).
+    x0 = []; %[0;ones(m,1)/m];    
     
-    [beta, fval, exitflag] = quadprog(H,f,A,b,Aeq,beq,lb,ub)
+    options = optimset('Algorithm', 'interior-point-convex');
+    [beta, fval, exitflag] = quadprog(H,f,A,b,Aeq,beq,lb,ub,x0,options);
     w_0 = beta(1);
     w = beta(2:end);
 %     Q = T-Ey^2 * ones(size(T)); 
