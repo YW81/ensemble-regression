@@ -21,4 +21,5 @@ function [y_pred,w,C] = ER_PerroneCooperGEM(Ztrain, ytrain, Ztest)
     
     % Calculate Predicted Response y
     y_pred = w' * Ztest;
+    y_pred = y_pred';
 end
