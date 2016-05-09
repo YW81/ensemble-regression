@@ -23,7 +23,7 @@ if isempty(strfind(hostname,'weiz')) parpool(4); else parpool(24); end; % if in 
 %             '/home/omer/code/github/ensemble-regression/ensemble.mat'};
 
 %ROOT = '~/code/github/ensemble-regression/auto/';
-ROOT = './Datasets/auto/';
+ROOT = './Datasets/auto_mlp5/';
 file_list = dir([ROOT '*.mat']);
 datasets = cell(1,length(file_list));
 for i=1:length(file_list)
