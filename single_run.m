@@ -7,7 +7,7 @@ addpath 'Ensemble_Regressors'
 addpath 'DataGeneration'
 [~,hostname] = system('hostname'); hostname = strtrim(hostname);
 delete(gcp); 
-if isempty(strfind(hostname,'weiz')) parpool(4); else parpool(8); end; % if in WIS run 8 workers
+if isempty(strfind(hostname,'weiz')) parpool(4); else parpool(24); end; % if in WIS run 8 workers
 
 %%%%%%%% LOAD DATA SET BEFORE RUNNING THIS CODE %%%%%%%%%%%%%%%
 %%%
@@ -90,7 +90,7 @@ for dataset_name=datasets
             options = optimoptions('fmincon', 'Display','None');%'iter-detailed');%,'MaxFunEvals',1e4);
         %
 
-    iters = 100;
+    iters = 1000;
     fval_cur = zeros(iters,1); lambda_rnd_cur = ceil(rand(iters,1)*8)/2; %zeros(iters,1); % lambda in .5:.5:4
     mean_reg_mse_cur = zeros(iters,1);
     beta_0_cur = cell(iters,1); beta_cur = cell(iters,1); y_cur = cell(iters,1); 
