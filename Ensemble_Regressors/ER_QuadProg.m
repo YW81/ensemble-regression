@@ -31,7 +31,7 @@ function [y_pred,beta] = ER_QuadProg(Z, Ey, Ey2)
     H = (H+H')/2; % make sure the hessian is symmetric to numerical accuracy (eps).
     x0 = []; %[0;ones(m,1)/m];    
     
-    options = optimset('Algorithm', 'interior-point-convex');
+    options = optimset('Algorithm', 'interior-point-convex', 'Display','None');
     [beta, fval, exitflag] = quadprog(H,f,A,b,Aeq,beq,lb,ub,x0,options);
     w_0 = beta(1);
     w = beta(2:end);

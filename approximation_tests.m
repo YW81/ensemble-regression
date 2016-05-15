@@ -1,6 +1,6 @@
 %%
 clear all; close all; 
-%clc;
+clc;
 addpath './Ensemble_Regressors'
 %DataFilename = 'ensemble_white_wine.mat';
 %DataFilename = 'ensemble.mat'; 
@@ -10,13 +10,35 @@ addpath './Ensemble_Regressors'
 %DataFilename = 'MVGaussianDepData.mat'; 
 %load(['./Datasets/' DataFilename]); %y=y_true;
 
-DataFilename = '/home/omer/code/github/ensemble-regression/ensemble.mat';
-load(DataFilename);
+% DataFilename = 'auto_basketball.mat'; 
+% load(['./Datasets/auto/' DataFilename]); %y=y_true;
 
+% DataFilename = '/home/omer/code/github/ensemble-regression/ensemble.mat';
+% load(DataFilename);
+
+%%
+ROOT = './Datasets/auto/';
+file_list = dir([ROOT '*.mat']);
+datasets = cell(1,length(file_list));
+for i=1:length(file_list)
+    datasets{i}=[ROOT file_list(i).name];
+end;
+
+for dataset_name=datasets
+    DataFilename = dataset_name{1};
+    load(DataFilename)
+
+    if isempty(strfind(dataset_name{1},'MVGaussianDepData')) % if ~strcmp(dataset_name{1},'./Datasets/MVGaussianDepData.mat') % 
+        y_true = double(y); clear y; % renmae y to y_true and make sure both y and y_true are double
+        ytrain = double(ytrain);     % (in the sweets dataset y is integer)
+    end;
+    y = y_true;
+    
+    
+%% Print data desc
 [m,n] = size(Z);
 var_y = Ey2 - Ey.^2;
 
-%% Print data desc
 fprintf('Data desc:\n');
 fprintf('m = %d, n = %d, Ey = %g, Ey2 = %g, Var(y) = %g\n', m, n, Ey, Ey2, var_y);
 
@@ -31,18 +53,19 @@ fprintf('%.2f%%;\t', 100*(b - b_hat) / Ey); fprintf('\n');
 
 %% f = y + b + e, check assumption that g_i = E[e] = 0, given b_hat instead of b
 e = Z - repmat(y, m,1) - repmat(b_hat,1,n); % approximate error term
-fprintf('\ng_i(x) = E[y e_i]:\n');
+% fprintf('\ng_i(x) = E[y e_i]:\n');
 g = mean(repmat(y,m,1) .* e, 2);
-fprintf('\tg_i \tg_i / var(y)\n');
-disp([g, g ./ var_y])
+% fprintf('\tg_i \tg_i / var(y)\n');
+% disp([g, g ./ var_y])
 
 %% f = y + b + e, check assumption that E[e_i e_j] is small
 % fprintf('\n');
 % E = e*e' /n;
 % disp(E)
 
-%% g
-fprintf('\nmax g ratio = %f\n',max(g/max(max(cov(Z') - Ey))));
-fprintf('max g / eig = %f\n',max(abs((g/(max(eig(cov(Z') - Ey)))))));
-% figure; plot(y,e','o','MarkerSize',10); legend('show'); grid on; axis tight; set(gca,'FontSize',14);
-% xlabel('True Response (y)'); ylabel('Error i (\epsilon_i)'); title(strrep(DataFilename,'_',' '));
+%% g_i = E[y * (y + b_i + e_i)], if we omit the last term, how much are we changing g_i?
+fprintf('%s\n',DataFilename)
+(mean(repmat(Ey2 + Ey*b_hat,1,n) .* repmat(y,m,1),2) ./ g)
+
+
+end; % for dataset_name in datasets

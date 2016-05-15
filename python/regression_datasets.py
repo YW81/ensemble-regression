@@ -87,21 +87,21 @@ class DatasetFactory:
 
     @staticmethod
     @dataset_generator
-    def friedman1(n_samples=1000):
+    def friedman1(n_samples=20000):
         """ Generated data """
         (data, target) = datasets.make_friedman1(n_samples=n_samples)
         return DatasetFactory.Dataset(data=data, target=target)
 
     @staticmethod
     @dataset_generator
-    def friedman2(n_samples=1000):
+    def friedman2(n_samples=20000):
         """ Generated data """
         (data, target) = datasets.make_friedman2(n_samples=n_samples)
         return DatasetFactory.Dataset(data=data, target=target)
 
     @staticmethod
     @dataset_generator
-    def friedman3(n_samples=1000):
+    def friedman3(n_samples=20000):
         """ Generated data """
         (data, target) = datasets.make_friedman3(n_samples=n_samples)
         return DatasetFactory.Dataset(data=data, target=target)
@@ -112,7 +112,7 @@ class DatasetFactory:
         """
         Instances in this dataset contain features extracted from blog posts.
         The task associated with the data is to predict how many comments the post will receive.
-	    """
+        """
         csvdata = np.loadtxt(os.path.join(UCI_DATASETS_BASE_DIR, 'BlogFeedback', 'blogData_train.csv'),
                              delimiter=',')
         (data, target) = csvdata[:, 0:-1], csvdata[:, -1]

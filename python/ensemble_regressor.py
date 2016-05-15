@@ -8,7 +8,7 @@ from sklearn.base import RegressorMixin, MetaEstimatorMixin, BaseEstimator
 from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor, BaggingRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import PolynomialFeatures
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.svm import SVR, LinearSVR
 from sklearn.tree import DecisionTreeRegressor
 from theano.gradient import np
@@ -68,8 +68,10 @@ class EnsembleRegressor(BaseEstimator, MetaEstimatorMixin, RegressorMixin):
         )
 
         self._nn_ensemble = [ MLPRegressor(nb_epoch=1000) for i in range(5) ]  # 5 Multi Layer Perceptrons in the ensemble
+        # self._nn_ensemble = [MLPRegressor(num_hidden_units=(i+6), nb_epoch=(i+6)*100) for i in range(5)]  # 5 Multi Layer Perceptrons in the ensemble
 
-        self.regressors = self._nn_ensemble
+        self.regressors = self._regressors_auto
+        # self.regressors = self._nn_ensemble
 
         # set regressor labels
         self.regressor_labels = []
@@ -152,8 +154,7 @@ class EnsembleRegressor(BaseEstimator, MetaEstimatorMixin, RegressorMixin):
         """
         :return: vector with the MSE for each regressor
         """
-        # Z = self.predict(X_test)
-        # return np.mean((Z - y_test[None, :])**2, 1)
-        return mean_squared_error(y_test[None, :], self.predict(X_test))
+        Z = self.predict(X_test)
+        return np.mean((Z - y_test[None, :])**2, 1)
         # y[None, :] ensures that the vector is properly oriented
         # np.mean(..., 1) does the mean along the columns returning regressor_count results

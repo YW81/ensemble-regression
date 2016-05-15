@@ -6,8 +6,8 @@ clc;
 addpath 'Ensemble_Regressors'
 addpath 'DataGeneration'
 [~,hostname] = system('hostname'); hostname = strtrim(hostname);
-delete(gcp); 
-if isempty(strfind(hostname,'weiz')) parpool(4); else parpool(24); end; % if in WIS run 8 workers
+random_init_iterations = 10;
+if ~isempty(strfind(hostname,'weiz')); delete(gcp); parpool(24); random_init_iterations = 1000; end; % if in WIS run worker pool
 
 %%%%%%%% LOAD DATA SET BEFORE RUNNING THIS CODE %%%%%%%%%%%%%%%
 %%%
@@ -23,16 +23,21 @@ if isempty(strfind(hostname,'weiz')) parpool(4); else parpool(24); end; % if in 
 %             '/home/omer/code/github/ensemble-regression/ensemble.mat'};
 
 %ROOT = '~/code/github/ensemble-regression/auto/';
-ROOT = './Datasets/auto_mlp5/';
+% ROOT = './Datasets/auto_mlp5/';
+ROOT = './Datasets/auto/';
 file_list = dir([ROOT '*.mat']);
 datasets = cell(1,length(file_list));
 for i=1:length(file_list)
     datasets{i}=[ROOT file_list(i).name];
 end;
+% datasets = {'./Datasets/auto_mlp5/auto_basketball.mat'};
 % datasets = {'./Datasets/MVGaussianDepData.mat'};
+% datasets = {'./Datasets/auto_mlp5/auto_boston.mat'};
 % datasets = {'~/code/github/ensemble-regression/auto/auto_ccpp.mat'};
 
+%% For each dataset
 for dataset_name=datasets
+    %%
     fprintf([dataset_name{1} '\n']);
     load(dataset_name{1})
     if isempty(strfind(dataset_name{1},'MVGaussianDepData')) % if ~strcmp(dataset_name{1},'./Datasets/MVGaussianDepData.mat') % 
@@ -41,6 +46,7 @@ for dataset_name=datasets
     end;
 
     [m,n] = size(Z);
+    %if n < 10000; continue; end;
     n_training_set = size(Ztrain,2);
     var_y = Ey2 - Ey.^2;
 
@@ -52,11 +58,14 @@ for dataset_name=datasets
     % Perrone & Cooper Supervised GEM
     [y_pc, w_pc, C_pc] = ER_PerroneCooperGEM(Ztrain, ytrain, Z);
 
+    % Breiman Star
+    [y_breiman, w_breiman, fval_breiman] = ER_BreimanStar(Ztrain, ytrain, Z);
+
     %% 2nd Moment Estimator (assumes Ey, Ey^2 are given)
     Ey = mean(y_true); Ey2 = mean(y_true.^2);
     [y_mean, beta_mean] = ER_MeanWithBiasCorrection(Z,Ey);
     [y_varw, beta_varw] = ER_VarianceWeightingWithBiasCorrection(Z,Ey);
-    [y_2, beta_2] = ER_SecondMoment(Z,Ey,Ey2); 
+    [y_2, beta_2]       = ER_SecondMoment(Z,Ey,Ey2); 
     [y_2oracle, beta_2oracle] = ER_SecondMomentOracle(Z,Ey,Ey2,y_true);
     [y_cvx_m, beta_cvx_m] = ER_ConvexProgram(Z, Ey, Ey2, 2, 2, beta_mean);
     [y_cvx_v, beta_cvx_v] = ER_ConvexProgram(Z, Ey, Ey2, 2, 2, beta_varw);
@@ -69,8 +78,8 @@ for dataset_name=datasets
         ER_ConvexProgramWithCV(Z, Ey, Ey2, beta_2); %set(gcf,'Name',[dataset_name{1} ' (init 2ME)']);
     %[y_cvx2, beta_cvx2] = ER_ConvexProgram2(Z, Ey, Ey2, lambda_mean, lambda_var);
     %[y_cvx_cv2, beta_cvx_cv2, lambda_mean2, lambda_var2] = ER_ConvexProgramWithCV2(Z, Ey, Ey2);
-    [y_b, beta_b] = ER_Boaz(Z,Ey,Ey2); 
-    [y_qp, beta_qp] = ER_QuadProg(Z,Ey,Ey2); 
+    %[y_b, beta_b] = ER_Boaz(Z,Ey,Ey2); 
+    %[y_qp, beta_qp] = ER_QuadProg(Z,Ey,Ey2); 
     
     %% Test random init
     
@@ -90,12 +99,11 @@ for dataset_name=datasets
             options = optimoptions('fmincon', 'Display','None');%'iter-detailed');%,'MaxFunEvals',1e4);
         %
 
-    iters = 1000;
-    fval_cur = zeros(iters,1); lambda_rnd_cur = ceil(rand(iters,1)*8)/2; %zeros(iters,1); % lambda in .5:.5:4
-    mean_reg_mse_cur = zeros(iters,1);
-    beta_0_cur = cell(iters,1); beta_cur = cell(iters,1); y_cur = cell(iters,1); 
+    fval_cur = zeros(random_init_iterations,1); lambda_rnd_cur = ceil(rand(random_init_iterations,1)*8)/2; %zeros(iters,1); % lambda in .5:.5:4
+    mean_reg_mse_cur = zeros(random_init_iterations,1);
+    beta_0_cur = cell(random_init_iterations,1); beta_cur = cell(random_init_iterations,1); y_cur = cell(random_init_iterations,1); 
     system('rm -f progress.txt; touch progress.txt');
-    parfor j=1:iters % average 50 seconds per 100 iterations
+    parfor j=1:random_init_iterations % average 50 seconds per 100 iterations
         beta_0_cur{j} = rand(m+1,1); 
         %lambda_rnd_cur(j) = ceil(rand*8)/2; % lambda in .5:.5:4
         obj = @(beta) cvx_opt_for_w(beta,m,n,Ey,var_y, C, Z1c, K1, K2, 0, lambda_rnd_cur(j));        
@@ -128,10 +136,12 @@ for dataset_name=datasets
     mse_oracle = mean((y_true'-y_oracle).^2);
     mse = @(x) (mean((y_true'-x).^2)) / mse_oracle; % show MSE relative to oracle.
     calc_g = @(x) (mean((Zc - repmat(x',m,1)).*repmat(x',m,1),2)); % calc g assuming x is the true response (y_true)
+    calc_g_rel = @(x) (calc_g(x) ./ calc_g(y_oracle));
     results_summary_current_dataset = ...
            {'oracle', mse_oracle ; ...
             'e2ME Oracle', mse(y_2oracle) ; ...
             'PC',   mse(y_pc) ; ...
+            'Breiman Star', mse(y_breiman) ; ...
             'Mean', mse(y_mean) ; ...
             'Var Weighted', mse(y_varw) ; ...
             'e2ME', mse(y_2) ; ...
@@ -161,6 +171,7 @@ for dataset_name=datasets
             'oracle mean g', mean(calc_g(y_oracle)) ; ...
             'e2ME Oracle mean g', mean(calc_g(y_2oracle)) ; ...
             'PC mean g',   mean(calc_g(y_pc)) ; ...
+            'Breiman Star mean g',   mean(calc_g(y_breiman)) ; ...
             'Mean mean g', mean(calc_g(y_mean)) ; ...
             'Var Weighted mean g', mean(calc_g(y_varw)) ; ...
             'e2ME mean g', mean(calc_g(y_2)) ; ...
@@ -176,6 +187,7 @@ for dataset_name=datasets
             'oracle var g', var(calc_g(y_oracle)) ; ...
             'e2ME Oracle var g', var(calc_g(y_2oracle)) ; ...
             'PC var g',   var(calc_g(y_pc)) ; ...
+            'Breiman var g',   var(calc_g(y_breiman)) ; ...
             'Mean var g', var(calc_g(y_mean)) ; ...
             'Var Weighted var g', var(calc_g(y_varw)) ; ...
             'e2ME var g', var(calc_g(y_2)) ; ...
@@ -186,8 +198,42 @@ for dataset_name=datasets
             'CVX CV iMean var g', var(calc_g(y_cvx_cv_m)); ...
             'CVX CV iVarw var g', var(calc_g(y_cvx_cv_v)); ...
             'CVX CV i2ME var g', var(calc_g(y_cvx_cv_2)); ...
-            'CVX CV iRND var g', var(calc_g(y_cvx_cv_rnd)); ...            
+            'CVX CV iRND var g', var(calc_g(y_cvx_cv_rnd)); ...
+            ... % PRINT g
+            'oracle g', num2str(calc_g(y_oracle)','%g\t') ; ...
+            'e2ME Oracle g', num2str(calc_g_rel(y_2oracle)','%g\t') ; ...
+            'PC g',   num2str(calc_g_rel(y_pc)','%g\t') ; ...
+            'Breiman Star g',   num2str(calc_g_rel(y_breiman)','%g\t') ; ...
+            'Mean g', num2str(calc_g_rel(y_mean)','%g\t') ; ...
+            'Var Weighted g', num2str(calc_g_rel(y_varw)','%g\t') ; ...
+            'e2ME g', num2str(calc_g_rel(y_2)','%g\t') ; ...
+            'Our Method g', num2str(calc_g_rel(y_our_method)','%g\t') ; ...
+            'CVX mean g', num2str(calc_g_rel(y_cvx_m)','%g\t') ; ...
+            'CVX varw g', num2str(calc_g_rel(y_cvx_v)','%g\t') ; ...
+            'CVX 2ME g', num2str(calc_g_rel(y_cvx_2)','%g\t') ; ...
+            'CVX CV iMean g', num2str(calc_g_rel(y_cvx_cv_m)','%g\t') ; ...
+            'CVX CV iVarw g', num2str(calc_g_rel(y_cvx_cv_v)','%g\t') ; ...
+            'CVX CV i2ME g', num2str(calc_g_rel(y_cvx_cv_2)','%g\t') ; ...
+            'CVX CV iRND g', num2str(calc_g_rel(y_cvx_cv_rnd)','%g\t') ; ...     
             };
+        
+    %% print g's
+%     fprintf('### g estimation\n');
+%     fprintf('### ============\n');
+%     fprintf('### oracle:\t %s\n', num2str(calc_g(y_oracle)'/var_y));
+%     fprintf('### e2ME Oracle:\t %s\n', num2str(calc_g(y_2oracle)'/var_y));
+% 	fprintf('### PC:\t %s\n',   num2str(calc_g(y_pc)'/var_y));
+%     fprintf('### Mean:\t %s\n', num2str(calc_g(y_mean)'/var_y));
+%     fprintf('### VarW:\t %s\n', num2str(calc_g(y_varw)'/var_y));
+%     fprintf('### e2ME:\t %s\n', num2str(calc_g(y_2)'/var_y));
+%     fprintf('### Our Method:\t %s\n', num2str(calc_g(y_our_method)'/var_y));
+%     fprintf('### CVX mean:\t %s\n', num2str(calc_g(y_cvx_m)'/var_y));
+%     fprintf('### CVX varw:\t %s\n', num2str(calc_g(y_cvx_v)'/var_y));
+%     fprintf('### CVX 2ME:\t %s\n', num2str(calc_g(y_cvx_2)'/var_y));
+%     fprintf('### CVX CV iMean:\t %s\n', num2str(calc_g(y_cvx_cv_m)'/var_y));
+%     fprintf('### CVX CV iVarw:\t %s\n', num2str(calc_g(y_cvx_cv_v)'/var_y));
+%     fprintf('### CVX CV i2ME:\t %s\n', num2str(calc_g(y_cvx_cv_2)'/var_y));
+%     fprintf('### CVX CV iRND:\t %s\n', num2str(calc_g(y_cvx_cv_rnd)'/var_y));
     
     if ~exist('results_summary','var')
         results_summary = cell(length(datasets), size(results_summary_current_dataset,1));
@@ -196,6 +242,7 @@ for dataset_name=datasets
         fprintf('%25s \t%g\n',results_summary_current_dataset{i,1}, results_summary_current_dataset{i,2});
         results_summary{find(strcmp(dataset_name,datasets)),i} = results_summary_current_dataset{i,2};
     end;
+    %%
 end % for dataset_name in datasets
 
 %% Print Result Summary

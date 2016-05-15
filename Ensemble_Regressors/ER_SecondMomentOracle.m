@@ -18,8 +18,14 @@ function [y_pred,beta] = ER_SecondMomentOracle(Z, Ey, Ey2, y)
     C = cov(Z');
     e = Z - b_hat * ones(1,n) - ones(m,1) * y; % note this is using estimated bias, and not real bias
     g = mean(e .* repmat(y,m,1),2);
+%    % Test with noisy g, see how it affects estimation (answer - dramatic errors)    % BOAZ STEP 1
+%     noise = 1+ (.01 * rand(m,1) - .005);
+%     g = g .* noise;
 
-    w = (C\(ones(m,1)*var_y + g));
+    % Test with C_tilde instead of C
+    Ci_tilde = pinv(C,.01);
+    w = Ci_tilde * (ones(m,1) * var_y + g); % BOAZ STEP 2
+    %w = (C\(ones(m,1)*var_y + g));
     w_0 = Ey * (1 - sum(w));
     
     y_pred = w_0 + (Z - repmat(b_hat,1,size(Z,2)))'*w;

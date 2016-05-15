@@ -89,10 +89,13 @@ def main():
     # make_ensemble(DatasetFactory.blockbuster(), "auto/auto_blockbuster.mat")
     # make_ensemble(DatasetFactory.boston())
 
-    for name,func in dataset_list.iteritems():
-        print(name)
-        dataset = func()
-        make_ensemble(dataset, "auto_mlp5/auto_" + name + ".mat", plotting=False)
+    # for name,func in dataset_list.iteritems():
+    #     print(name)
+    #     dataset = func()
+    #     make_ensemble(dataset, "auto_mlp5_change_h_num/auto_" + name + ".mat", plotting=False)
+    make_ensemble(DatasetFactory.friedman1(), "auto/auto_friedman1_new.mat")
+    make_ensemble(DatasetFactory.friedman2(), "auto/auto_friedman2_new.mat")
+    make_ensemble(DatasetFactory.friedman3(), "auto/auto_friedman3_new.mat")
 
     print('Done.')
 
