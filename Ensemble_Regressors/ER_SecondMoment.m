@@ -10,23 +10,24 @@
 %   R_hat = Sigma + mu*mu'; % Estimated uncentered covariance
 %
 function [y_pred,beta] = ER_SecondMoment(Z, Ey, Ey2)
-    [m,n] = size(Z);
-    I_m = eye(m);
-    b_hat = mean(Z,2)-Ey; 
-    
-    var_y = Ey2 - Ey.^2;
-
-%% Using Cij = cov(f_i, f_j)
-    C = cov(Z');
-    g = 0; %g = .5*(mean((Z - repmat(b_hat,1,n)).^2,2) - Ey2); % -\E[e.^2] which is unknown
-
-    Ci_tilde = pinv(C,.01);
-    w = Ci_tilde * (ones(m,1) * var_y + g); % BOAZ STEP 2 is for the oracle, but why not do this for the non-oracle?
-%    w = (C\(ones(m,1)*var_y + g));
-    
-%% calculate predictions
-    w_0 = Ey * (1 - sum(w));
-    
-    y_pred = w_0 + (Z - repmat(b_hat,1,size(Z,2)))'*w;
-    beta = [w_0;w];
+    [y_pred, beta] = ER_SecondMomentGiven_g(Z,Ey,Ey2,zeros(size(Z,1),1));
+%     [m,n] = size(Z);
+%     I_m = eye(m);
+%     b_hat = mean(Z,2)-Ey; 
+%     
+%     var_y = Ey2 - Ey.^2;
+% 
+% %% Using Cij = cov(f_i, f_j)
+%     C = cov(Z');
+%     g = 0; %g = .5*(mean((Z - repmat(b_hat,1,n)).^2,2) - Ey2); % -\E[e.^2] which is unknown
+% 
+%     Ci_tilde = pinv(C,.01);
+%     w = Ci_tilde * (ones(m,1) * var_y + g); % BOAZ STEP 2 is for the oracle, but why not do this for the non-oracle?
+% %    w = (C\(ones(m,1)*var_y + g));
+%     
+% %% calculate predictions
+%     w_0 = Ey * (1 - sum(w));
+%     
+%     y_pred = w_0 + (Z - repmat(b_hat,1,size(Z,2)))'*w;
+%     beta = [w_0;w];
 end
