@@ -39,17 +39,27 @@ for dataset_name=datasets
 [m,n] = size(Z);
 var_y = Ey2 - Ey.^2;
 
-fprintf('Data desc:\n');
+fprintf('%s\n',DataFilename)
 fprintf('m = %d, n = %d, Ey = %g, Ey2 = %g, Var(y) = %g\n', m, n, Ey, Ey2, var_y);
 
 
 %% f = y + b + e, check assumption b_hat = b (bias estimation error)
 b = mean(Z - repmat(y,m,1),2); % real bias
 b_hat = mean(Z,2) - Ey; % approximate bias
-fprintf('Bias estimation error =\t');
-fprintf('%.2g;\t', b - b_hat); fprintf('\n');
-fprintf('\t\t\t%% of E[y] =\t');
-fprintf('%.2f%%;\t', 100*(b - b_hat) / Ey); fprintf('\n');
+% fprintf('Bias estimation error =\t');
+% fprintf('%.2g;\t', b - b_hat); fprintf('\n');
+% fprintf('\t\t\t%% of E[y] =\t');
+% fprintf('%.2f%%;\t', 100*(b - b_hat) / Ey); fprintf('\n');
+
+%% Plot eCDF
+% Zc = Z - repmat(b_hat,1,n); 
+% figure; hold all; ecdf(y); 
+% for i=1:m; ecdf(Zc(i,:)); end; 
+% grid on; ylim([-.1 1.1]); title(DataFilename,'Interpreter','none');
+% if isempty(strfind(dataset_name{1},'MVGaussianDepData'));
+%     legend(['y';mat2cell(names,ones(6,1), 320)],'Location','southoutside'); 
+% end;
+
 
 %% f = y + b + e, check assumption that g_i = E[e] = 0, given b_hat instead of b
 e = Z - repmat(y, m,1) - repmat(b_hat,1,n); % approximate error term
@@ -58,13 +68,22 @@ g = mean(repmat(y,m,1) .* e, 2);
 % fprintf('\tg_i \tg_i / var(y)\n');
 % disp([g, g ./ var_y])
 
+n_sample = floor(.95*n);
+idxs = randsample(n,n_sample);
+y_sample = y(idxs);
+e_sample = Z(:,idxs) - repmat(y_sample,m,1) - repmat(b_hat,1,n_sample);
+g_sample = mean(repmat(y_sample,m,1) .* e_sample,2);
+
+fprintf('g sample MSE:\t %f\n', mean((g-g_sample).^2));
+fprintf('g vs g_sample\n');
+[g g_sample]
+
 %% f = y + b + e, check assumption that E[e_i e_j] is small
 % fprintf('\n');
 % E = e*e' /n;
 % disp(E)
 
 %% g_i = E[y * (y + b_i + e_i)], if we omit the last term, how much are we changing g_i?
-fprintf('%s\n',DataFilename)
 (mean(repmat(Ey2 + Ey*b_hat,1,n) .* repmat(y,m,1),2) ./ g)
 
 

@@ -24,7 +24,8 @@ function [y_pred,w,fval] = ER_BreimanStar(Ztrain, ytrain, Ztest)
     f = -Ztrain*ytrain';
     lb = zeros(m,1);  % constraining w_k>0
     
-    [w, fval] = quadprog(H,f,[],[],[],[],lb,[]);
+    options = optimoptions('quadprog', 'Display','None');
+    [w, fval] = quadprog(H,f,[],[],[],[],lb,[],[],options);
     
     % Calculate Predicted Response y
     y_pred = Ztest' * w;

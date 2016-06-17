@@ -1,3 +1,4 @@
+% function [y_pred, beta] = ER_MeanWithBiasCorrection(Z, Ey)
 % Unsupervised estimator with weights that are inversly proportional to the variance
 function [y_pred, beta] = ER_MeanWithBiasCorrection(Z, Ey)
     [m,n] = size(Z);
