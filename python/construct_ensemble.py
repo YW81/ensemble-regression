@@ -30,7 +30,7 @@ def make_ensemble(dataset, mat_filename='ensemble.mat', ensemble_type='auto',
            Defaults to no overlap if there are at least 100 samples per regressor, else full overlap (overlap=n).
     :param plotting: plots results
     """
-    if (train_size is not None) and (test_size is not None):
+    if (train_size is None) and (test_size is None):
         if len(dataset.target) < 20000:
             (test_size,train_size) = (0.75, 0.25)
         else:
@@ -54,7 +54,7 @@ def make_ensemble(dataset, mat_filename='ensemble.mat', ensemble_type='auto',
         samples_per_regressor = (n // m) + overlap  # '//' is python operator for floor of n/m
 
     else: # both are None
-        if n < m*100:
+        if n < m*100:  # reserve at least 100 samples for training the individual regressors
             overlap = n
             samples_per_regressor = (samples_per_regressor or n)
         else:  # we have enough samples to be training on different parts of the dataset
