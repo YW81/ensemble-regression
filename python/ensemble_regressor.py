@@ -18,60 +18,122 @@ from nw_kernel_regression import KernelRegression
 
 
 class EnsembleRegressor(BaseEstimator, MetaEstimatorMixin, RegressorMixin):
-    def __init__(self, verbose=False):
+    # Static member variables
+    _ensemble_regressors_auto = (
+        linear_model.LinearRegression(fit_intercept=True),
+        Pipeline(
+            [('poly', PolynomialFeatures(degree=2)),
+             ('linear', linear_model.LinearRegression(fit_intercept=False))]
+        ),
+        KernelRegression(kernel='poly'),
+        DecisionTreeRegressor(max_depth=4),
+        DecisionTreeRegressor(max_depth=None),
+        RandomForestRegressor(n_estimators=100),
+    )
+
+    _ensemble_possible_regressors = (
+        linear_model.LinearRegression(fit_intercept=True),
+        Pipeline(
+            [('poly', PolynomialFeatures(degree=2)),
+             ('linear', linear_model.LinearRegression(fit_intercept=False))]
+        ),
+        # # linear_model.Ridge(alpha=4, fit_intercept=True),
+        KernelRegression(kernel='poly'),
+        # linear_model.RidgeCV(alphas=[.01, .1, .3, .5, 1], fit_intercept=True),
+        # # linear_model.Lasso(alpha=4, fit_intercept=True),
+        # linear_model.LassoCV(n_alphas=100, fit_intercept=True, max_iter=5000),
+        # linear_model.ElasticNet(alpha=1),
+        # linear_model.ElasticNetCV(n_alphas=100, l1_ratio=.5),
+        # linear_model.OrthogonalMatchingPursuit(),
+        # linear_model.BayesianRidge(),
+        # # linear_model.ARDRegression(),
+        # linear_model.SGDRegressor(),
+        # # linear_model.PassiveAggressiveRegressor(loss='squared_epsilon_insensitive'),
+        # linear_model.RANSACRegressor(),
+        # LinearSVR(max_iter=1e4, fit_intercept=True, loss='squared_epsilon_insensitive', C=0.5),
+        # SVR(max_iter=1e4, kernel='poly', C=1, degree=4),
+        # SVR(max_iter=1e4, kernel='rbf', C=1, gamma=0.1),
+        # SVR(kernel='linear', C=1),
+        # SVR(kernel='linear', C=0.5),
+        # SVR(kernel='linear', C=0.1),
+        # DecisionTreeRegressor(max_depth=5),
+        DecisionTreeRegressor(max_depth=4),
+        DecisionTreeRegressor(max_depth=None),
+        RandomForestRegressor(n_estimators=100),
+        # AdaBoostRegressor(learning_rate=0.9, loss='square'),
+        # BaggingRegressor(),
+        MLPRegressor()
+    )
+
+    _ensemble_nn = [MLPRegressor(nb_epoch=1000) for _ in range(5)]  # 5 Multi Layer Perceptrons in the ensemble
+
+    _ensemble_nn_large = [MLPRegressor(nb_epoch=500) for _ in range(10)]  # 5 Multi Layer Perceptrons in the ensemble
+
+    _ensemble_ridge_regression = [
+        linear_model.Ridge(alpha=alpha, fit_intercept=True, normalize=True)
+        for alpha in np.arange(.1,1,.2)]  # 5 Ridge Regressors
+
+    _ensemble_auto_large = (
+        linear_model.LinearRegression(fit_intercept=True),
+        Pipeline(
+            [('poly', PolynomialFeatures(degree=2)),
+             ('linear', linear_model.LinearRegression(fit_intercept=False))]
+        ),
+        linear_model.Ridge(alpha=0.5, fit_intercept=True, normalize=True),
+        KernelRegression(kernel='poly'),
+        # linear_model.RidgeCV(alphas=[.01, .1, .3, .5, 1], fit_intercept=True),
+        linear_model.Lasso(alpha=0.1, fit_intercept=True),
+        # linear_model.LassoCV(n_alphas=100, fit_intercept=True, max_iter=5000),
+        # linear_model.ElasticNet(alpha=1),
+        # linear_model.ElasticNetCV(n_alphas=100, l1_ratio=.5),
+        linear_model.OrthogonalMatchingPursuit(),
+        # linear_model.BayesianRidge(),
+        # # linear_model.ARDRegression(),
+        # linear_model.SGDRegressor(),
+        # linear_model.PassiveAggressiveRegressor(loss='squared_epsilon_insensitive'),
+        # linear_model.RANSACRegressor(),
+        LinearSVR(max_iter=1e3, fit_intercept=True, loss='squared_epsilon_insensitive', C=1),
+        SVR(max_iter=1e3, kernel='poly', C=1, degree=3),
+        SVR(max_iter=1e3, kernel='rbf', C=1),
+        SVR(max_iter=1e3, kernel='sigmoid', C=1),
+        # SVR(kernel='linear', C=1),
+        # SVR(kernel='linear', C=0.5),
+        # SVR(kernel='linear', C=0.1),
+        # DecisionTreeRegressor(max_depth=5),
+        DecisionTreeRegressor(max_depth=4),
+        DecisionTreeRegressor(max_depth=None),
+        RandomForestRegressor(n_estimators=100),
+        AdaBoostRegressor(learning_rate=0.9, loss='square'),
+        BaggingRegressor(),
+        # MLPRegressor(num_hidden_units=5)
+    )
+
+    # self._ensemble_nn = [MLPRegressor(num_hidden_units=(i+6), nb_epoch=(i+6)*100) for i in range(5)]  # 5 Multi Layer Perceptrons in the ensemble
+
+    def __init__(self, type='auto', verbose=False):
+        '''
+        :param type: Possible values: 'auto', 'mlp', 'mlp_large', 'ridge', 'auto_large' (defaults to 'auto').
+                     Choice of set of regressors, 'auto' will use various standard regressors (usually linear
+                     regression, NW-kernel, decision trees and random forests, but subject to change).
+                     'mlp' will use 5 Multi-Layer Perceptrons, each with 10 hidden units, batch_size=32 and 1000 epochs.
+                     'mlp_large' will use 10 MLPs, each with 10 hidden units, batch_size=32 and only 500 epochs.
+                     'ridge' will train 5 ridge regressors with different alphas.
+        :param verbose:
+        '''
         self._verbose = verbose
+        self.type = type.lower() # convert type to lowercase
 
-        self._regressors_auto = (
-            linear_model.LinearRegression(fit_intercept=True),
-            Pipeline(
-                [('poly', PolynomialFeatures(degree=2)),
-                 ('linear', linear_model.LinearRegression(fit_intercept=False))]
-            ),
-            KernelRegression(kernel='poly'),
-            DecisionTreeRegressor(max_depth=4),
-            DecisionTreeRegressor(max_depth=None),
-            RandomForestRegressor(n_estimators=100),
-        )
+        if type == 'mlp':
+            self.regressors = EnsembleRegressor._ensemble_nn
+        elif type == 'mlp_large':
+            self.regressors = EnsembleRegressor._ensemble_nn_large
+        elif type == 'ridge':
+            self.regressors = EnsembleRegressor._ensemble_ridge_regression
+        elif type == 'auto_large':
+            self.regressors = EnsembleRegressor._ensemble_auto_large
+        else:
+            self.regressors = EnsembleRegressor._ensemble_regressors_auto
 
-        self._possible_regressors = (
-            linear_model.LinearRegression(fit_intercept=True),
-            Pipeline(
-                [('poly', PolynomialFeatures(degree=2)),
-                 ('linear', linear_model.LinearRegression(fit_intercept=False))]
-            ),
-            # # linear_model.Ridge(alpha=4, fit_intercept=True),
-            KernelRegression(kernel='poly'),
-            # linear_model.RidgeCV(alphas=[.01, .1, .3, .5, 1], fit_intercept=True),
-            # # linear_model.Lasso(alpha=4, fit_intercept=True),
-            # linear_model.LassoCV(n_alphas=100, fit_intercept=True, max_iter=5000),
-            # linear_model.ElasticNet(alpha=1),
-            # linear_model.ElasticNetCV(n_alphas=100, l1_ratio=.5),
-            # linear_model.OrthogonalMatchingPursuit(),
-            # linear_model.BayesianRidge(),
-            # # linear_model.ARDRegression(),
-            # linear_model.SGDRegressor(),
-            # # linear_model.PassiveAggressiveRegressor(loss='squared_epsilon_insensitive'),
-            # linear_model.RANSACRegressor(),
-            # LinearSVR(max_iter=1e4, fit_intercept=True, loss='squared_epsilon_insensitive', C=0.5),
-            # SVR(max_iter=1e4, kernel='poly', C=1, degree=4),
-            # SVR(max_iter=1e4, kernel='rbf', C=1, gamma=0.1),
-            # SVR(kernel='linear', C=1),
-            # SVR(kernel='linear', C=0.5),
-            # SVR(kernel='linear', C=0.1),
-            # DecisionTreeRegressor(max_depth=5),
-            DecisionTreeRegressor(max_depth=4),
-            DecisionTreeRegressor(max_depth=None),
-            RandomForestRegressor(n_estimators=100),
-            # AdaBoostRegressor(learning_rate=0.9, loss='square'),
-            # BaggingRegressor(),
-            MLPRegressor()
-        )
-
-        self._nn_ensemble = [ MLPRegressor(nb_epoch=1000) for i in range(5) ]  # 5 Multi Layer Perceptrons in the ensemble
-        # self._nn_ensemble = [MLPRegressor(num_hidden_units=(i+6), nb_epoch=(i+6)*100) for i in range(5)]  # 5 Multi Layer Perceptrons in the ensemble
-
-        self.regressors = self._regressors_auto
-        # self.regressors = self._nn_ensemble
 
         # set regressor labels
         self.regressor_labels = []
@@ -88,6 +150,7 @@ class EnsembleRegressor(BaseEstimator, MetaEstimatorMixin, RegressorMixin):
         """ Fits the model for all the regression algorithms in the ensemble.
             The models themselves can be accessed directly at EnsembleRegressor.regressors,
             and their labels is accessible in EnsembleRegressor.regressor_labels.
+
         :param X_train: Data matrix. Shape [# samples, # features].
         :param y_train: Target value vector.
         :param samples_per_regressor: Number of samples from X_train that each regressor will be trained on.
@@ -97,7 +160,7 @@ class EnsembleRegressor(BaseEstimator, MetaEstimatorMixin, RegressorMixin):
         """
         start_sample = 0
         if samples_per_regressor is None:
-            end_sample = -1
+            end_sample = None
         else:
             end_sample = samples_per_regressor
 
@@ -137,7 +200,7 @@ class EnsembleRegressor(BaseEstimator, MetaEstimatorMixin, RegressorMixin):
 
         return Z
 
-    def score(self, X_test, y_test):
+    def score(self, X_test, y_test, **kwargs):
         """
         :return: vector with the R^2 score for each regressor
         """
