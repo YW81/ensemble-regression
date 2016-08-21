@@ -5,6 +5,7 @@ import numpy as np
 from os import path
 import scipy.io as sio
 from keras.utils import np_utils
+from pandas.parser import _ensure_encoded
 from sklearn import preprocessing, cross_validation, linear_model
 
 from ensemble_regressor import EnsembleRegressor
@@ -14,7 +15,7 @@ from regression_datasets import DatasetFactory, dataset_list
 
 def make_ensemble(dataset, mat_filename='ensemble.mat', ensemble_type='auto',
                   train_size=None, test_size=None, samples_per_regressor=None, overlap=None, plotting=True,
-                  Description=None):
+                  Description=None, scale_data=False):
     """
     construct_ensemble splits the dataset into train and 'test'. The ensemble regressors are trained on the training
     set. The test set is saved to the mat file to be used by matlab code.
@@ -30,6 +31,9 @@ def make_ensemble(dataset, mat_filename='ensemble.mat', ensemble_type='auto',
            Defaults to no overlap if there are at least 100 samples per regressor, else full overlap (overlap=n).
     :param plotting: plots results
     """
+    if scale_data:
+        dataset.data = preprocessing.scale(dataset.data)
+
     if (train_size is None) and (test_size is None):
         if len(dataset.target) < 20000:
             (test_size,train_size) = (0.75, 0.25)
@@ -53,7 +57,7 @@ def make_ensemble(dataset, mat_filename='ensemble.mat', ensemble_type='auto',
     elif overlap and not samples_per_regressor:
         samples_per_regressor = (n // m) + overlap  # '//' is python operator for floor of n/m
 
-    else: # both are None
+    else: # both are None or only samples_per_regressor was given
         if n < m*100:  # reserve at least 100 samples for training the individual regressors
             overlap = n
             samples_per_regressor = (samples_per_regressor or n)
@@ -259,6 +263,12 @@ def RepeatRealDatasetsDifferentRegressorsTest():
         dataset = func()
         make_ensemble(dataset, "auto_repeat/auto_" + name + ".mat", plotting=False)
 
+def RealDatasetsDifferentRegressorsLargeTest():
+    for name,func in dataset_list.iteritems():
+        print(name)
+        dataset = func()
+        make_ensemble(dataset, "auto_repeat/auto_" + name + ".mat", plotting=False,
+                      ensemble_type='auto_large', scale_data=True)
 
 def main():
     #RidgeRegressionEnsembleTest()
@@ -266,6 +276,7 @@ def main():
     #RealDatasetsManualEnsembleTest()
     #RealDatasetsLargeMLPEnsembleTest()
     RepeatRealDatasetsDifferentRegressorsTest()
+    RealDatasetsDifferentRegressorsLargeTest()
 
     # Prepare dataset
     # make_ensemble(DatasetFactory.nasdaq_index(), "auto/auto_NASDAQ_index.mat")
