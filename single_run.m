@@ -14,25 +14,16 @@ if ~isempty(strfind(hostname,'weiz')); delete(gcp); parpool(24); random_init_ite
 %%% The code assumes existance of Z,y,Ztrain,ytrain, Ey, Ey2
 %%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% datasets = {'./Datasets/MVGaussianDepData.mat', ... %y=y_true;
-%             './Datasets/ensemble_CCPP.mat', ...
-%             './Datasets/ensemble_abalone.mat', ...
-%             './Datasets/ensemble_bike_sharing.mat', ...
-%             './Datasets/ensemble_white_wine.mat', ...
-%             './Datasets/ensemble_SP500_swcp.mat', ...
-%             '/home/omer/code/github/ensemble-regression/ensemble.mat'};
-
 %ROOT = '~/code/github/ensemble-regression/auto/';
-ROOT = './Datasets/auto_mlp5/';
+%ROOT = './Datasets/auto_mlp5/';
 %ROOT = './Datasets/auto/';
+ROOT = './Datasets/final/misc';
 file_list = dir([ROOT '*.mat']);
 datasets = cell(1,length(file_list));
 for i=1:length(file_list)
     datasets{i}=[ROOT file_list(i).name];
 end;
 % datasets = {'./Datasets/auto_mlp5/auto_basketball.mat'};
-% datasets = {'./Datasets/MVGaussianDepData.mat'};
-% datasets = {'./Datasets/auto_mlp5/auto_boston.mat'};
 % datasets = {'~/code/github/ensemble-regression/auto/auto_ccpp.mat'};
 
 %% For each dataset
@@ -40,7 +31,7 @@ for dataset_name=datasets
     %%
     fprintf([dataset_name{1} '\n']);
     load(dataset_name{1})
-    if isempty(strfind(dataset_name{1},'MVGaussianDepData')) % if ~strcmp(dataset_name{1},'./Datasets/MVGaussianDepData.mat') % 
+    if isempty(strfind(dataset_name{1},'MVGaussianDepData'))
         y_true = double(y); clear y; % renmae y to y_true and make sure both y and y_true are double
         ytrain = double(ytrain);     % (in the sweets dataset y is integer)
     end;

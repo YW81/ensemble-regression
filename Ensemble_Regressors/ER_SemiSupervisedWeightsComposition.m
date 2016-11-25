@@ -7,8 +7,9 @@ function [y_pred] = ER_SemiSupervisedWeightsComposition(Ztrain, ytrain, Ztest)
    
     % Get PCR* weights
     [y_pcrstar,w_pcrstar,~] = ER_PCRstar(Ztrain, ytrain, Ztest);
-    [y_semi_s,w_semi_s,~] = ER_SemiSupervised_S_SelectionSpectralApproach(Ztrain, ytrain, Ztest);
+    %[y_semi_s,w_semi_s,~] = ER_SemiSupervised_S_SelectionSpectralApproach(Ztrain, ytrain, Ztest);
+    [y_us,w_us,~] = ER_SpectralApproach(Ztest, mean(ytrain), mean(ytrain.^2));
     
     % return results
-    y_pred = (y_pcrstar + y_semi_s)/2;
+    y_pred = (y_pcrstar + y_us)/2;
 end

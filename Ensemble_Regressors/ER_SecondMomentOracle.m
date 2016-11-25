@@ -1,14 +1,10 @@
-% function [y_pred,beta,rho_hat] = ER_SecondMoment(Z, Ey, Ey2, mu, b_hat, R_hat)
+% function [y_pred,beta] = ER_SecondMomentOracle(Z, Ey, Ey2, y)
 % Calculate the second moment estimation of y
 % Input:
 %   Z = data matrix
 %   Ey = E[y] (y being the response variable)
 %   Ey2 = E[y^2]
 %   
-%   mu = mean(Z,2);    % Mean estimate of each regressor mu(i) = mean(f(i))
-%   b_hat = mean(Z,2) - Ey; % Estimate of the bias of each regressor
-%   R_hat = Sigma + mu*mu'; % Estimated uncentered covariance
-%
 function [y_pred,beta] = ER_SecondMomentOracle(Z, Ey, Ey2, y)
     [m,n] = size(Z);
 
