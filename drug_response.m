@@ -94,3 +94,22 @@ fprintf('\n');
 p=pivottable(results_summary,2,1,3,@sum)
 a=cell2mat(p(2:end,2:end))
 p(:,1)
+
+
+%%
+idx_orc = 11;
+
+figure(1); clf;  msize = 8; 
+set(gca,'fontsize',20); 
+hold on; grid on; 
+plot(a(idx_orc,:),a(6,:),'k>'); %mean
+plot(a(idx_orc,:),a(7,:),'b.','markersize',msize);   %median
+plot(a(idx_orc,:),a(2,:),'rs','markersize',msize);   %D-GEM
+plot(a(idx_orc,:),a(end-1,:),'md','markersize',msize);   %GEM-HAT-RHO
+%plot(a(11,:),a(5,:),'gp','markersize',msize);  %INDEPENDENT ERRORS
+
+legend('MEAN','MED','DGEM','PCR','Location','NorthWest'); 
+plot(a(idx_orc,:),a(idx_orc,:),'b-'); 
+plot(a(idx_orc,:),a(idx_orc-3,:),'bo','markersize',msize+2); 
+
+axis([0 0.7 0 1]); 

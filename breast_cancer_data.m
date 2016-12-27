@@ -64,15 +64,19 @@ end;
 %Zfull = Z; Z = Z(1:20,:); [m,n] = size(Z);
 Ey = mean(y_true);
 Ey2 = mean(y_true.^2);
+var_y = Ey2 - Ey.^2;
+mse = @(x) mean((y_true' - x).^2 / var_y);    
 
+y_oracle2 = ER_Oracle_2_Unbiased(y_true, Z);
+y_best = ER_BestRegressor(y_true,Z);
 y_mean = ER_MeanWithBiasCorrection(Z, Ey);
+y_median = ER_MedianWithBiasCorrection(Z, Ey);
 y_dgem = ER_UnsupervisedDiagonalGEM(Z, Ey);
 y_gem  = ER_UnsupervisedGEM(Z, Ey,Ey2);
 y_spectral = ER_SpectralApproach(Z, Ey, Ey2);
-y_zeromisfit = ER_LowRankMisfit(Z,Ey,Ey2,y_true);
-%[y_lrm,~,y_oracle_rho] = ER_LowRankMisfitCVX(Z, Ey, Ey2, y_true);
-y_rank1 = ER_Rank1Misfit(Z,Ey,Ey2,y_true,1);
-%y_rank2 = ER_Rank1Misfit(Z,Ey,Ey2,y_true,2);
+y_spectralgivend = ER_SpectralApproachGivenDeltaStar(Z, Ey, Ey2,mse(y_oracle2));
+y_indepmisfit = ER_IndependentMisfits(Z,Ey, Ey2); 
+
 
 %% Print results
 mse = @(x) mean((y_true' - x).^2);
@@ -82,3 +86,10 @@ for alg=who('y_*')'
     end;
 end;
 fprintf('Best individual SQRT(MSE): %g\nBest individual SPEARMAN_CORR: %g\n', sqrt(min(mean((Z - repmat(y_true,m,1)).^2,2))), max(corr(y_true',Z')));
+
+fprintf('\n\n\nAlgorithm\t& $\\sqrt(\\text{MSE})$\n');
+for alg=who('y_*')'
+    if ~strcmp(alg{1}, 'y_true')
+        fprintf('%s \t& %g & \\\\ \\hline\n',alg{1},sqrt(mse(eval(alg{1}))));
+    end;
+end;
