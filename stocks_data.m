@@ -1,4 +1,4 @@
-clear all;
+clear all; close all;
 addpath Ensemble_Regressors/
 addpath Ensemble_Regressors/Missing_Values/
 %load ~/code/github/stocks/data/parsed_data_matrix.mat;
@@ -8,122 +8,111 @@ min_ensemble_m = 4;  %require at least m predictions for given stock price targe
 min_predictions_per_expert = 3;
 
 % Some ordering
-Z(Z == 0) = NaN;  % missing values should be NaN (instead of zeros)
+Z(Z == 0) = nan;  % missing values should be NaN (instead of zeros)
 Z = Z';
+
+Z(:,strcmp(labels_tickers,'NFLX')) = nan;
+Z(:,strcmp(labels_tickers,'EXXI')) = nan;
+Z(:,strcmp(labels_tickers,'ANGI')) = nan;
+Z(:,strcmp(labels_tickers,'BBEP')) = nan;
+
+Z(:,strcmp(labels_tickers,'FFIV')) = nan;
+Z(:,strcmp(labels_tickers,'MU')) = nan;
+Z(:,strcmp(labels_tickers,'WYNN')) = nan;
+
+Z(:,strcmp(labels_tickers,'AMZN')) = nan;
+Z(:,strcmp(labels_tickers,'CTRP')) = nan;
+Z(:,strcmp(labels_tickers,'ATVI')) = nan;
+Z(:,strcmp(labels_tickers,'NVDA')) = nan;
+
+Z(:,strcmp(labels_tickers,'ZNGA')) = nan;
+Z(:,strcmp(labels_tickers,'PTEN')) = nan;
+Z(:,strcmp(labels_tickers,'MDVN')) = nan;
+Z(:,strcmp(labels_tickers,'FUEL')) = nan;
+Z(:,strcmp(labels_tickers,'EBAY')) = nan;
+Z(:,strcmp(labels_tickers,'DISCA')) = nan;
+
+Z(:,strcmp(labels_tickers,'GPRO')) = nan;
+Z(:,strcmp(labels_tickers,'GRPN')) = nan;
+Z(:,strcmp(labels_tickers,'SSYS')) = nan;
+Z(:,strcmp(labels_tickers,'ZUMZ')) = nan;
+Z(:,find((y > 1.5) + (y < 0.5))) = nan;
+
 Z((sum(~isnan(Z),2) < min_predictions_per_expert),:) = NaN; % eliminate predictors with not enough preds.
 Z(:,(sum(~isnan(Z),1) < min_ensemble_m)) = NaN; % eliminate stocks with not enough preds.
+
+% [v,ix] = sort(sum(~isnan(Z),2),'descend');
+% Z = Z(ix(1:10),:);
+C = nancov(Z','pairwise');
+[Cdense,ix] = get_largest_dense_submatrix(C);
+Z = Z(ix,:);
+
 stocks_with_preds = ~all(isnan(Z)); y = y(stocks_with_preds); labels_tickers = labels_tickers(stocks_with_preds);
 Z=Z(~all(isnan(Z),2),stocks_with_preds); % remove all nan rows and columns
-Ey = mean(y);
-Ey2 = mean(y.^2);
-var_y = var(y);
+y_true = y'; clear y;
 
-% Some common variables
+% mean centering
 n = size(Z,2);                       % n = number of stocks
-b_hat = nanmean(Z,2) - Ey;           % This assumes we know Ey....
-Z0 = Z - nanmean(Z,2)*ones(1,n);     % Z_ij = f_i(x_j) - \mu_i
-mse = @(x) (nanmean((y-x).^2));
+y_true = y_true - nanmean(y_true);
+Zorig = Z;
+Z = bsxfun(@minus, Z, nanmean(Z,2));
 
-C = nancov(Z','pairwise');
+Ey = nanmean(y_true);
+Ey2 = nanmean(y_true.^2);
+var_y = var(y_true);
+mse = @(x) (nanmean((y_true'-x).^2))/var_y;
 
-%%
-% Initialization: All arrays correct size, with NaN entries
-y_mean = zeros(n,1)*NaN;
-y_varw = zeros(n,1)*NaN;
-y_ugem = zeros(n,1)*NaN;
-y_spectral = zeros(n,1)*NaN;
-y_lrm = zeros(n,1)*NaN;
-y_dgem = zeros(n,1)*NaN;
-
-%%
-% For every stock, calculate the predictions ignoring missing values
-for i = 1:n
-    % find indexes of relevant predictors
-    idxs = find(~isnan(Z(:,i)));   % indices of experts that provided prediction on stock i
-    m = numel(idxs);
-    
-    if m < 4
-        continue; 
-    end
-    
-    % Mean centered
-    w_mean = ones(m,1)/m;
-    y_mean(i) = Ey + Z0(idxs,i)'*w_mean;
-    
-    % Variance Weighted
-    cur_vars = diag(C(idxs,idxs));
-    w_varw = cur_vars / sum(cur_vars);
-    y_varw(i) = Ey + Z0(idxs,i)'*w_varw;
-    
-    % Unsupervised GEM (with rho=1)
-    cur_C = C(idxs,idxs);
-    cur_C(isnan(cur_C)) = 0;  % assumption: if 2 predictors have independent entries, they are independent
-    cur_Cinv = pinv(cur_C,.01); % Do diagonal loading instead of pruning, because the data is sparse
-    w_ugem = cur_Cinv*ones(m,1) / (ones(1,m) * cur_Cinv * ones(m,1));
-    y_ugem(i) = Ey + Z0(idxs,i)'*w_ugem;
-    
-    % Spectral
-    cur_C = C(idxs,idxs);
-    cur_C(isnan(cur_C)) = 0;  % assumption: if 2 predictors have independent entries, they are independent
-    [v_1,lambda_1] = eigs(cur_C,1,'lm');
-    t = sign(sum(v_1)) * sqrt(var_y / lambda_1);
-    w_spectral = t * v_1;
-    y_spectral(i) = Ey + Z0(idxs,i)' * w_spectral;
-    
-    % Low Rank Misfit
-    if m >= 4
-        cur_C = C(idxs,idxs);
-        lrm_subs = nchoosek(1:m,2);
-        lrm_idxs = sub2ind(size(cur_C),lrm_subs(:,1),lrm_subs(:,2));
-        gamma = cur_C(lrm_idxs) + Ey2; %var_y;
-        A = zeros(size(lrm_subs,1), m);
-        for j=1:size(lrm_subs,1)
-            A(j,lrm_subs(j,1)) = 1;
-            A(j,lrm_subs(j,2)) = 1;
-        end;
-        rho = A\gamma;
-        lambda = ( ones(1,m)*(cur_C\rho) - 1 ) / (ones(1,m)*(cur_C\ones(m,1)));
-        w_lrm = cur_C\(rho - lambda*ones(m,1));
-        y_lrm(i) = Ey + Z0(idxs,i)' * w_lrm;    
-    end;
-end;
-
-% Unsupervised D-GEM Initialization (requires results for y_mean)
-MSEs = nanmean((repmat(y_mean',size(Z,1),1) - Z).^2,2); % Estimate MSE per regressor
-for i=1:n
-    idxs = find(~isnan(Z(:,i)));
-    m = numel(idxs);
-    if m < min_ensemble_m
-        continue;
-    end;
-    w_dgem = 1 ./ MSEs(idxs);
-    w_dgem = w_dgem ./ sum(w_dgem);
-    y_dgem(i) = Ey + Z0(idxs,i)' * w_dgem;
-end;
-
+%% Calculate predictions ignoring missing values
+%y_oracle = MV_Oracle_2_Unbiased(y, Z, min_ensemble_m, min_predictions_per_expert);
+y_biasedmean = nanmean(Zorig)';
+y_naive = Ey * ones(n,1);
+y_mean = MV_MeanWithBiasCorrection(Z,Ey,min_ensemble_m);
+y_median = MV_MedianWithBiasCorrection(Z,Ey,min_ensemble_m);
+y_upcr = MV_UnsupervisedPCRstar(Z,Ey,Ey2,min_ensemble_m,min_predictions_per_expert);
+y_upcrgivend = MV_UnsupervisedPCRgivendelta(y_true,Z,Ey,Ey2,min_ensemble_m,min_predictions_per_expert);
+[y_upcrRE, y_upcrWRE] = MV_UnsupervisedPCRdeltaWRE(Z,Ey,Ey2,min_ensemble_m,min_predictions_per_expert);
+%y_ugem = MV_UnsupervisedGEM(Z,Ey,min_ensemble_m,min_predictions_per_expert);
+%y_ugem_with_rho_est = MV_UnsupervisedGEM_with_rho_estimation(Z,Ey,min_ensemble_m,min_predictions_per_expert);
+y_dgem = MV_UnsupervisedDiagonalGEM(Z,Ey,min_ensemble_m);
+y_indepmisfit = MV_IndependentMisfits(Z,Ey,Ey2,min_ensemble_m,min_predictions_per_expert);
 
 %% Print results
-y_mean2 = MV_MeanWithBiasCorrection(Z,Ey,min_ensemble_m);
-y_spectral2 = MV_UnsupervisedPCRstar(Z,Ey,Ey2,min_ensemble_m,0);
-y_ugem2 = MV_UnsupervisedGEM(Z,Ey,min_ensemble_m,0);
-y_ugem_with_rho_est2 = MV_UnsupervisedGEM_with_rho_estimation(Z,Ey,min_ensemble_m,0);
-y_dgem2 = MV_UnsupervisedDiagonalGEM(Z,Ey,min_ensemble_m);
-y_lrm2 = MV_IndependentMisfits(Z,Ey,Ey2,min_ensemble_m,0);
-
-mse = @(x) nanmean((y - x).^2);
-L1err = @(x) nanmean(abs(y - x));
-for alg=who('y_*','Y_*')'
+L1err = @(x) nanmean(abs(y_true' - x));
+for alg=who('y_*')'
     if ~strcmp(alg{1}, 'y_true')
-        fprintf('MSE=%.02f \tL1=%.02f \t%s \t%d NaNs\n',mse(eval(alg{1})),L1err(eval(alg{1})), alg{1}, sum(isnan(eval(alg{1}))));
+        cur_MSE = mse(eval(alg{1}));
+        cur_n = sum(~isnan(eval(alg{1})));
+        fprintf('RMSE=%.02f \tL1=%.02f \t%s \t%d Not NaNs (%.02f,%.02f)\n', ...
+                sqrt(cur_MSE), L1err(eval(alg{1})), alg{1}, cur_n, ...
+                sqrt(cur_MSE .* cur_n ./ chi2inv([.025,.975],cur_n) )); % 95% CI = https://stats.stackexchange.com/questions/78079/confidence-interval-of-rmse
+
+        % Confidence Interval for MSE is MSE * (n/chi2(1-alpha/2, n), n/chi2(alpha/2,n))
+        % where chi2(a,n) is the chi2 distribution with n degrees of freedom, and a (1-a)
+        % probability of being within the range
     end;
 end;
 
+for alg=who('y_*')'
+    if ~strcmp(alg{1}, 'y_true')
+        cur_MSE = mse(eval(alg{1}));
+        cur_n = sum(~isnan(eval(alg{1})));
+        fprintf('%20s \t%.02f (%.02f,%.02f) & %.02f & %d\n', ...
+                alg{1}, sqrt(cur_MSE), ...
+                sqrt(cur_MSE .* cur_n ./ chi2inv([.975,.025],cur_n) ),... % 95% CI = https://stats.stackexchange.com/questions/78079/confidence-interval-of-rmse
+                L1err(eval(alg{1})), cur_n);
+    end;
+end;
+
+
 %% Plots
-figure;
-plot(y,y,'k-',y,y_mean,'x',y,y_varw,'o',y,y_ugem,'d',y,y_spectral,'s',y,y_lrm,'v');
-legend('y=y','mean','varw','uGEM','spectral','LRM');
+figure; 
+plot(y_true,y_true,'k-',y_true,y_mean,'x',y_true,y_upcrgivend,'s',y_true,y_indepmisfit,'v');
+grid on; grid minor; axis tight;
+legend('y=y','MED','U-PCR','SIE');
 xlabel('True response');
 ylabel('Prediction');
 
-corrplot([y y_mean y_varw y_ugem y_dgem y_spectral y_lrm],'varnames',{'truth','mean','varw','uGEM','D-GEM','spectral','LRM'})
+%%
+%corrplot([y_true y_mean y_ugem y_dgem y_upcrgivend y_lrm],'varnames',{'truth','mean','uGEM','D-GEM','spectral','LRM'})
 
+m=size(Z,1); figure; hold on;for i=1:m; plot(y_true,Z(i,:),'.'); end; plot(y_true,y_true,'x'); hold off; grid on; grid minor;

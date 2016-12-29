@@ -70,6 +70,7 @@ mse = @(x) mean((y_true' - x).^2 / var_y);
 y_oracle2 = ER_Oracle_2_Unbiased(y_true, Z);
 y_best = ER_BestRegressor(y_true,Z);
 y_mean = ER_MeanWithBiasCorrection(Z, Ey);
+y_biasedmean = mean(Z)'; % most teams are unbiased, so this should be equivalent to the mean
 y_median = ER_MedianWithBiasCorrection(Z, Ey);
 y_dgem = ER_UnsupervisedDiagonalGEM(Z, Ey);
 y_gem  = ER_UnsupervisedGEM(Z, Ey,Ey2);
@@ -81,7 +82,7 @@ y_indepmisfit = ER_IndependentMisfits(Z,Ey, Ey2);
 %% Print results
 mse = @(x) mean((y_true' - x).^2);
 for alg=who('y_*')'
-    if ~strcmp(alg{1}, 'y_true')
+    if ((~strcmp(alg{1}, 'y_true')) && (~strcmp(alg{1}, 'y_true_orig')))
         fprintf('SQRT(MSE): %g \tSPEARMAN_CORR: %g \t%s\n',sqrt(mse(eval(alg{1}))), corr(eval(alg{1}),y_true','type','spearman'),alg{1});
     end;
 end;
@@ -89,7 +90,7 @@ fprintf('Best individual SQRT(MSE): %g\nBest individual SPEARMAN_CORR: %g\n', sq
 
 fprintf('\n\n\nAlgorithm\t& $\\sqrt(\\text{MSE})$\n');
 for alg=who('y_*')'
-    if ~strcmp(alg{1}, 'y_true')
+    if ((~strcmp(alg{1}, 'y_true')) && (~strcmp(alg{1}, 'y_true_orig')))
         fprintf('%s \t& %g & \\\\ \\hline\n',alg{1},sqrt(mse(eval(alg{1}))));
     end;
 end;

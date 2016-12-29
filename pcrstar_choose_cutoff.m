@@ -46,4 +46,5 @@ function [K] = pcrstar_choose_cutoff(A, Gamma, ytrain)
     
     %meanMSE = mean(Error_plot,2); figure; plot(Error_plot,'x-'); hold on; plot(meanMSE,'k--'); hold off;
     K = find(Error == min(Error));
+    disp(Error/var(ytrain))
 end
