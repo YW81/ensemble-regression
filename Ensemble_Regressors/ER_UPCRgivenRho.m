@@ -1,5 +1,5 @@
-% function [y_pred, w, t] = ER_SpectralApproach(Z, Ey)
-function [y_pred, w, t, rho_hat] = ER_SpectralApproachGivenDeltaStar(Z, Ey, Ey2, deltastar)
+% function [y_pred, w, t, residual] = ER_SpectralApproach(Z, Ey)
+function [y_pred, w, t, residual] = ER_UPCRgivenRho(Z, Ey, Ey2, rho_est)
 
     % basic variables
     [m,n] = size(Z);    
@@ -9,11 +9,14 @@ function [y_pred, w, t, rho_hat] = ER_SpectralApproachGivenDeltaStar(Z, Ey, Ey2,
 
     % Get leading eigenvector and eigenvalue
     [v_1,lambda_1] = eigs(C,1,'lm');
-    t_sign = sign(sum(v_1));
-    t = t_sign * sqrt((1-deltastar)*var_y / lambda_1);
+    %t_sign = sign(sum(v_1));
+    t = v_1' * rho_est / lambda_1;
+    %t = t_sign * sqrt((1-deltastar)*var_y / lambda_1);
     
     % Calculate predictions
     w = t * v_1;
     y_pred = Ey + Z0' * w;
-    rho_hat = w / lambda_1;
+    
+    residual = norm(w*lambda_1 - rho_est); 
+    
 end

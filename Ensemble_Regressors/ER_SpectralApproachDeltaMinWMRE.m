@@ -12,6 +12,9 @@ function [y_pred, w, t] = ER_SpectralApproachDeltaMinWMRE(Z, Ey, Ey2, deltastar)
     [v_1,lambda_1] = eigs(C,1,'lm');
     t_sign = sign(sum(v_1));
     t = t_sign * sqrt((1-deltastar)*var_y / lambda_1);
+    if any(t_sign*v_1 < 0)
+        fprintf(2, 'v_1 has %d negative values\n',sum(t_sign*v_1 < 0));
+    end;
     
     t_RE = sum(v_1)/m;
     t_WRE = 1/sum(v_1);

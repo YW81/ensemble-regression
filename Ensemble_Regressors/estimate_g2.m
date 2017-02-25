@@ -1,6 +1,6 @@
 % function [y_lrm, w_lrm] = ER_IndependentMisfits( Z, Ey, Ey2 )
 % Assume independent misfit errors (diagonal C*), recover rho, find optimal weights.
-function [y_lrm, w_lrm,rho_hat] = ER_IndependentMisfits( Z, Ey, Ey2 , loss)
+function [g2_est] = estimate_g2( Z, Ey, Ey2 , loss)
     if ~exist('loss','var')  % loss can be 'l2','l1','huber'
         loss = 'l2';
     end;
@@ -17,7 +17,9 @@ function [y_lrm, w_lrm,rho_hat] = ER_IndependentMisfits( Z, Ey, Ey2 , loss)
     % such that A\rho = C + Ey2. A is m-choose-2 combinations of regressors (off-diagonal elements only)
     subs = nchoosek(1:m,2);
     idxs = sub2ind(size(C),subs(:,1),subs(:,2));
-    Cshifted = C(idxs) + Ey2; %var_y;
+
+    XCov = (1 / n) * (squareform(pdist(Z)).^2); % XCov_{ij} = mean((Z(i,:) - Z(j,:)).^2) = E[(f_i - f_j)^2]
+    XCov = XCov(idxs);
     A = zeros(size(subs,1), m);
     for i=1:size(subs,1)
         A(i,subs(i,1)) = 1;
@@ -25,25 +27,19 @@ function [y_lrm, w_lrm,rho_hat] = ER_IndependentMisfits( Z, Ey, Ey2 , loss)
     end;
     % Solve for rho: A*rho = C+Ey2
     if strcmp(loss,'huber')
-        fval = @(rho) sum(huber(Cshifted - A*rho,1/(10*m))); % Huber-loss with delta = 1/10m
-        rho = fminunc(fval,zeros(m,1));
+        fval = @(rho) sum(huber(XCov - A*rho,1/(10*m))); % Huber-loss with delta = 1/10m
+        b = fminunc(fval,zeros(m,1));
     elseif strcmp(loss,'l1')
-        fval = @(rho) norm(Cshifted - A*rho,1);  % L1-loss
-        rho = fminunc(fval,zeros(m,1));
+        fval = @(rho) norm(XCov - A*rho,1);  % L1-loss
+        b = fminunc(fval,zeros(m,1));
     else
         %fval = @(rho) norm(Cshifted - A*rho);  % L2-loss <==> Least-Squares
         %rho = A\Cshifted; % Least-Squares
-        [rho, resnorm, residuals] = lsqlin(A,Cshifted);
+        [b, resnorm, residuals] = lsqlin(A,XCov);
         R=zeros(m); R(idxs)=residuals./Ey2; R=R+R'; %imagesc(R); colormap(hot); colorbar;title('unconstrained residuals'); 
         fprintf('unconstraind norm(residuals) = %.2f',norm(R));
     end;
 
-    % Calculate weights based on the assumption of independent misfit errors
-    Cinv = pinv(C,1e-5);
-    w_lrm = Cinv*(rho - ones(m,1)*(ones(1,m)*(Cinv*rho)-1)/sum(sum(Cinv))); % constrain sum(w)=1
-    %w_lrm = Cinv*rho;
-    %%
-    y_lrm = Ey + Z0' * w_lrm;    
-    rho_hat = rho;
+    g2_est = (trace(C) - sum(b))/m;
 end
 
